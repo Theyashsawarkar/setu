@@ -44,7 +44,7 @@ class Plugin(Base):
     preview = True
     preview_width = 280
     live = 3
-    hints = [Hint("↵", "connect / disconnect"), Hint("⌃P", "pair"), Hint("⌃⌫", "remove"), Hint("⌃B", "on/off")]
+    hints = [Hint("Enter", "connect / disconnect"), Hint("Ctrl+P", "pair"), Hint("Ctrl+Backspace", "remove"), Hint("Ctrl+B", "on/off")]
     empty_text = "No devices yet: nearby ones show up as they're found"
 
     def __init__(self, vyom, conf):
