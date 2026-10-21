@@ -1,0 +1,8 @@
+# The project website (docs/, GitHub Pages): built by scripts/build-site.py
+name = "setu"
+sanskrit = "सेतु"
+meaning = "bridge"
+tagline = "Bluetooth: devices with battery levels, discovery while open, connect, disconnect, pair, remove, power."
+color = "blue"
+kind = "a Vyom tool"
+logo = "assets/logo.svg"
