@@ -22,6 +22,11 @@
 
 <!-- No screenshot: bluetooth shows personal data (your own devices). -->
 
+<p align="center">
+  <img alt="setu: connected, paired and nearby Bluetooth devices with battery levels, and the picked headphones' details with Disconnect and Remove" src="assets/screenshots/setu.png" width="100%">
+</p>
+<p align="center"><sub>Screenshots use made-up demo devices.</sub></p>
+
 > *Setu* (सेतु) is Sanskrit for "bridge": the bridge between your laptop and your Bluetooth devices.
 
 setu is bluetooth for [Vyom](https://github.com/Theyashsawarkar/vyom): one keyboard-driven panel that opens instantly, with live data, a preview and a key for everything. It runs on any compositor with the layer-shell protocol (sway, Hyprland, river, niri, Wayfire, labwc…). In [Vayu](https://github.com/Theyashsawarkar/vayu), the desktop it was built for, it replaces bluetooth-picker.py.
