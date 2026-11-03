@@ -6,6 +6,15 @@
   </picture>
 </p>
 
+<!-- identity -->
+<p align="center">
+  <b>यस्मिन्द्यौः पृथिवी चान्तरिक्षमोतं मनः सह प्राणैश्च सर्वैः ।<br>
+  तमेवैकं जानथ आत्मानमन्या वाचो विमुञ्चथामृतस्यैष सेतुः ॥</b><br>
+  <i>In that one, sky and earth and all between are woven: know it alone, for this is the bridge to the deathless.</i><br>
+  <sub>Muṇḍaka Upaniṣad 2.2.5</sub>
+</p>
+<!-- /identity -->
+
 <p align="center">
   <b>Bluetooth: devices with battery levels, discovery while open, connect, disconnect, pair, remove, power.</b><br>
   Bluetooth. A tool for <a href="https://github.com/Theyashsawarkar/vyom">Vyom</a>, keyboard-driven panels for Wayland.

@@ -6,3 +6,6 @@ tagline = "Bluetooth: devices with battery levels, discovery while open, connect
 color = "blue"
 kind = "a Vyom tool"
 logo = "assets/logo.svg"
+shloka = "यस्मिन्द्यौः पृथिवी चान्तरिक्षमोतं मनः सह प्राणैश्च सर्वैः ।\nतमेवैकं जानथ आत्मानमन्या वाचो विमुञ्चथामृतस्यैष सेतुः ॥"
+shloka_meaning = "In that one, sky and earth and all between are woven: know it alone, for this is the bridge to the deathless."
+shloka_source = "Muṇḍaka Upaniṣad 2.2.5"
