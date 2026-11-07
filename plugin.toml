@@ -1,8 +1,8 @@
 name = "setu"
 title = "Bluetooth"
-description = "Bluetooth: devices with battery levels, discovery while open, connect, disconnect, pair, remove, power."
-version = "0.1.3"
-vyom = "0.2"
+description = "Bluetooth: connected devices as cards with battery rings, what your headphones are doing, nearby devices by distance, and pairing with the code shown big."
+version = "0.2.0"
+vyom = "0.6.0"
 icon = "󰂯"
 color = "blue"
-requires = ["bluetoothctl"]
+requires = []   # bluetoothctl: without it the panel says how to install it

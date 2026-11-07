@@ -1,1 +1,31 @@
-.setu-big { font-family: "JetBrainsMono Nerd Font"; font-size: 34px; color: @blue; }
+/* setu: connected devices as cards, and pairing as a step of its own. */
+.setu-card { border-radius: 16px; padding: 12px 14px; background: alpha(white, 0.035);
+  border: 1px solid alpha(white, 0.07); }
+.setu-card.setu-card-low { border-color: alpha(@red, 0.45); }
+/* where you are: the same accent frame as a selected row */
+.setu-card.setu-picked { border: 2px solid alpha(@accent, 0.75); background: alpha(@accent, 0.08); }
+.setu-card-icon { font-size: 24px; color: @blue; }
+.setu-card-name { font-weight: 700; font-size: 14px; }
+.setu-card-line { font-size: 12.5px; }
+.setu-quiet { color: @subtext0; }
+.setu-mini { font-family: "JetBrainsMono Nerd Font"; font-size: 12px; font-weight: 800; }
+.setu-noring { min-width: 58px; min-height: 58px; border-radius: 29px; }
+.setu-noring .glyph { font-size: 24px; }
+.setu-big-tile { min-width: 50px; min-height: 50px; border-radius: 15px; }
+.setu-big-tile .glyph { font-size: 26px; }
+/* "Looking for devices": a slow yellow pulse */
+@keyframes setu-pulse { 0% { opacity: 1; } 50% { opacity: 0.25; } 100% { opacity: 1; } }
+.setu-pulse { font-size: 9px; animation: setu-pulse 1.4s ease-in-out infinite; }
+.setu-trouble { margin-bottom: 2px; }
+/* pairing */
+.setu-pair { margin: 30px 20px 10px 20px; padding: 26px 30px; border-radius: 18px; min-width: 420px;
+  background: alpha(white, 0.035); border: 1px solid alpha(white, 0.08); }
+.setu-pair.setu-pair-yellow { border-color: alpha(@yellow, 0.45); }
+.setu-pair.setu-pair-red { border-color: alpha(@red, 0.5); }
+.setu-pair.setu-pair-green { border-color: alpha(@green, 0.5); }
+.setu-pair-tile { min-width: 60px; min-height: 60px; border-radius: 18px; }
+.setu-pair-tile .glyph { font-size: 32px; }
+.setu-pair-title { font-size: 17px; font-weight: 700; }
+.setu-pair-note { color: @subtext0; font-size: 13px; }
+.setu-code { font-family: "JetBrainsMono Nerd Font"; font-size: 40px; font-weight: 800; letter-spacing: 8px;
+  color: @peach; margin: 4px 0; }
