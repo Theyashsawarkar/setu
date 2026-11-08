@@ -2,7 +2,10 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
-## Unreleased
+## v0.2.1 -- 2026-11-08
+
+- The Bluetooth switch is Vyom's `ui.switch()` (Vyom 0.6.2), with its own fix for GTK's
+  baselines warning, instead of setu's copy of it.
 
 ## v0.2.0 -- 2026-11-07
 

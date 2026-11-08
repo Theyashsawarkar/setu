@@ -107,17 +107,8 @@ class Plugin(Base):
     # ------------------------------------------------------------ header
     def header_extra(self):
         self.chipbox = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER)
-        self.switch = Gtk.Switch(valign=Gtk.Align.CENTER)
-        self.switch.set_can_focus(False)
-        # GTK's switch draws two tiny on/off images that warn about their
-        # baselines in a top bar; the switch reads fine without them.
-        c = self.switch.get_first_child()
-        while c is not None:
-            if isinstance(c, Gtk.Image):
-                c.set_visible(False)
-            c = c.get_next_sibling()
-        self.switch.set_tooltip_text("Bluetooth on or off (Ctrl+B)")
-        self.handler = self.switch.connect("state-set", lambda _s, on: (self.power(on), False)[1])
+        self.switch = ui.switch(False, self.power, "Bluetooth on or off (Ctrl+B)")
+        self.handler = self.switch.handler
         box = ui.hbox(self.chipbox, self.switch, spacing=10)
         box.set_valign(Gtk.Align.CENTER)
         return box
