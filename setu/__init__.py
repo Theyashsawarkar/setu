@@ -10,13 +10,10 @@ import subprocess
 import time
 
 from gi.repository import GLib, Gtk, Pango
-
 from vyom import Hint, Row, Section, ui, util
 from vyom import Plugin as Base
 
-from . import vim
-
-from . import audio, bluez
+from . import audio, bluez, fastpair, vim
 from .pairing import Session
 
 # KEYBINDS (generated from setu/vim.py by scripts/keybinds.py; don't edit by hand)
@@ -45,6 +42,8 @@ ICONS = {"audio-headset": "\U000f02cb", "audio-headphones": "\U000f02cb", "audio
          "video-display": "\U000f0379", "multimedia-player": "\U000f075a"}
 CHECK, VOLUME, EYE, EYE_OFF, CASE = "\U000f012c", "\U000f057e", "\U000f0208", "\U000f0209", "\U000f03d7"
 LINK, LINK_OFF, DELETE, CLOSE, POWER = "\U000f0337", "\U000f0338", "\U000f01b4", "\U000f0156", "\U000f0425"
+BOLT = "\U000f0241"
+PART_NAMES = {"left": "Left", "right": "Right", "case": "Case"}
 
 
 def icon_of(d):
@@ -58,6 +57,17 @@ def charge(p):
     if p < 20:
         return "yellow", "charge soon"
     return "green", ""
+
+
+def part_color(level):
+    """A bud's or the case's colour: red at 20% or less, yellow at 40% or less."""
+    if level is None:
+        return "gray"
+    if level <= 20:
+        return "red"
+    if level <= 40:
+        return "yellow"
+    return "green"
 
 
 def signal(rssi):
@@ -114,6 +124,8 @@ class Plugin(Base):
         self.cards = {}
         self.seen = util.load_state("setu-last-connected", {})
         self.seen_saved = 0.0
+        self.fp = fastpair.Scanner()   # left / right / case from Fast Pair advertisements
+        self.is_open = False
 
     def available(self):
         return True, ""   # no bluetoothctl / no adapter: the panel says so, clearly
@@ -161,8 +173,12 @@ class Plugin(Base):
     def opened(self, args):
         super().opened(args)
         self.start_scan()
+        self.is_open = True
+        self.background(self.fp.start)
 
     def closed(self):
+        self.is_open = False
+        self.background(self.fp.stop)       # our LE scan ends with the panel
         if self.session is not None:
             self.session.cancel()
             self.end_session()
@@ -212,6 +228,24 @@ class Plugin(Base):
             self.seen_saved = now
             util.save_state("setu-last-connected", self.seen)
 
+        # Fast Pair: what earbuds said in their advertisements, matched to the
+        # connected device by its name (the advertiser has an address of its
+        # own); two connected devices with one name: no guess, nothing shown.
+        if connected and self.is_open and not self.fp.on:
+            self.fp.start()                 # Bluetooth came on while the panel was open
+        readings = self.fp.read(now) if connected else {}
+        if not self.is_open:
+            self.fp.stop()                  # the panel closed while this ran
+        names = [d.get("Alias") or d.get("Name") or "" for d in connected]
+        matched = set()
+        for d, name in zip(connected, names):
+            r = readings.get(name)
+            if r and names.count(name) == 1:
+                d["fp"] = r
+                if r.get("address"):
+                    matched.add(r["address"].upper())
+        devs = [d for d in devs if d["mac"].upper() not in matched or d.get("Connected") == "yes"]
+
         conn, paired, near = [], [], []
         for d in devs:
             d["name"] = d.get("Alias") or d.get("Name") or ""
@@ -247,8 +281,12 @@ class Plugin(Base):
         return rows
 
     def batteries(self, d):
-        """[(label, percent)]: UPower's separate ones (left, right, case) when
-        it reports several, else BlueZ's one, else none."""
+        """[(label, percent)]: the earbuds' own (Fast Pair: left, right, case)
+        when they say, UPower's separate ones when it reports several, else
+        BlueZ's one, else none."""
+        fp = d.get("fp")
+        if fp:
+            return [(PART_NAMES[k], p["level"]) for k, p in fp["parts"].items() if p["level"] is not None]
         if d["mac"].upper() in self.ubats:
             return self.ubats[d["mac"].upper()]
         return [("", d["battery"])] if d["battery"] is not None else []
@@ -344,7 +382,8 @@ class Plugin(Base):
             rings = []
             for lab, p in bats:
                 inner = ui.label(CASE if lab.lower() == "case" else (lab[:1] or "?"), "setu-mini")
-                rings.append(ui.ring(p / 100, charge(p)[0], 40, 4, inner))
+                col = part_color(p) if d.get("fp") else charge(p)[0]
+                rings.append(ui.ring(p / 100, col, 40, 4, inner))
             visual = ui.hbox(*rings, spacing=4)
         else:
             visual = ui.tile(icon_of(d), "blue", 22, "setu-noring")
@@ -353,6 +392,12 @@ class Plugin(Base):
             p = bats[0][1]
             col, words = charge(p)
             lines.append(ui.label(f"{p}%" + (f" · {words}" if words else ""), f"t-{col}", "setu-card-line",
+                                  xalign=0, ellipsize=Pango.EllipsizeMode.END))
+        elif bats and d.get("fp"):
+            parts = d["fp"]["parts"]
+            worst = min((p["level"] for p in parts.values() if p["level"] is not None), default=100)
+            col = part_color(worst)
+            lines.append(ui.label(fastpair.compact(parts), "setu-card-line", f"t-{col}",
                                   xalign=0, ellipsize=Pango.EllipsizeMode.END))
         elif bats:
             ok = [f"{lab} {p}%" for lab, p in bats if charge(p)[0] == "green"]
@@ -424,7 +469,9 @@ class Plugin(Base):
         parts = [head]
         if mac in self.errors:
             parts.append(ui.notice("Didn't work", self.errors[mac], "red"))
-        for lab, p in self.batteries(d):
+        if d.get("fp"):
+            parts.append(self.gauges(d["fp"]))
+        for lab, p in ([] if d.get("fp") else self.batteries(d)):
             col, words = charge(p)
             parts.append(ui.meter(f"{lab} battery".strip().capitalize() if lab else "Battery",
                                   f"{p}%" + (f" · {words}" if words else ""), p / 100, col))
@@ -450,6 +497,39 @@ class Plugin(Base):
         parts.append(ui.kv(kv))
         parts.append(self.preview_buttons(d, a))
         return ui.vbox(*parts, spacing=12)
+
+    def gauges(self, reading):
+        """Left · Right · Case, side by side: the level big, a bar, a bolt
+        when charging, — when the bud didn't say (in the case, or closed)."""
+        cells = []
+        for key in fastpair.PARTS:
+            p = reading["parts"][key]
+            lvl, col = p["level"], part_color(p["level"])
+            name = ui.label(PART_NAMES[key], "setu-gauge-name", xalign=0, hexpand=True)
+            head = ui.hbox(name, spacing=4)
+            if p["charging"] and lvl is not None:
+                head.append(ui.label(BOLT, "glyph", "t-green", "setu-bolt"))
+            if lvl is None:
+                num = ui.label("—", "setu-gauge-num", "setu-quiet", xalign=0)
+            else:
+                num = ui.hbox(ui.label(str(lvl), "setu-gauge-num", f"t-{col}", xalign=0),
+                              ui.label("%", "setu-gauge-unit", f"t-{col}", valign=Gtk.Align.END), spacing=1)
+            bar = ui.progress((lvl or 0) / 100, col if lvl is not None else "gray")
+            cell = ui.vbox(head, num, bar, spacing=4, cls="setu-gauge")
+            if lvl is None:
+                cell.add_css_class("setu-gauge-unknown")
+                cell.set_tooltip_text("Not reported: in the case, or the case is closed")
+            elif p["charging"]:
+                cell.set_tooltip_text(f"{PART_NAMES[key]}: {lvl}%, charging")
+            cells.append(cell)
+        row = Gtk.Grid(column_spacing=8, column_homogeneous=True)
+        for i, c in enumerate(cells):
+            row.attach(c, i, 0, 1, 1)
+        age = time.time() - reading["at"]
+        note = "From the buds' Fast Pair broadcast" if age < fastpair.STALE else f"As of {ago(reading['at'])}: not heard since"
+        head = ui.hbox(ui.label("Battery", "meter-name", xalign=0, hexpand=True),
+                       ui.label(note, "p-meta", "setu-gauge-note"), spacing=8)
+        return ui.vbox(head, row, spacing=8, cls="soft")
 
     def preview_buttons(self, d, a):
         g = d["group"]

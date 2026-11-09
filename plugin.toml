@@ -1,7 +1,7 @@
 name = "setu"
 title = "Bluetooth"
 description = "Bluetooth: connected devices as cards with battery rings, what your headphones are doing, nearby devices by distance, and pairing with the code shown big."
-version = "0.3.0"
+version = "0.4.0"
 vyom = "0.7.0"
 icon = "󰂯"
 color = "blue"

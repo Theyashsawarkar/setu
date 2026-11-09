@@ -29,3 +29,13 @@
 .setu-pair-note { color: @subtext0; font-size: 13px; }
 .setu-code { font-family: "JetBrainsMono Nerd Font"; font-size: 40px; font-weight: 800; letter-spacing: 8px;
   color: @peach; margin: 4px 0; }
+/* Earbuds: left · right · case, side by side (Fast Pair) */
+.setu-gauge { border-radius: 12px; padding: 9px 10px 10px 10px; background: alpha(white, 0.04);
+  border: 1px solid alpha(white, 0.07); }
+.setu-gauge.setu-gauge-unknown { background: alpha(white, 0.02); border-style: dashed; }
+.setu-gauge-name { color: @subtext0; font-size: 11.5px; font-weight: 600; }
+.setu-gauge-num { font-size: 21px; font-weight: 800; font-feature-settings: "tnum"; }
+.setu-gauge-unit { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+.setu-gauge-note { font-size: 10.5px; }
+.setu-gauge progressbar trough, .setu-gauge progressbar progress { min-height: 5px; border-radius: 3px; }
+.setu-bolt { font-size: 13px; }

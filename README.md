@@ -24,7 +24,7 @@
   <a href="https://github.com/Theyashsawarkar/setu/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Theyashsawarkar/setu/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/Theyashsawarkar/setu/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Theyashsawarkar/setu?color=cba6f7&label=release"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-f5e0dc"></a>
-  <a href="https://github.com/Theyashsawarkar/vyom"><img alt="Vyom 0.6+" src="https://img.shields.io/badge/vyom-0.6%2B-89b4fa"></a>
+  <a href="https://github.com/Theyashsawarkar/vyom"><img alt="Vyom 0.7+" src="https://img.shields.io/badge/vyom-0.7%2B-89b4fa"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-a6e3a1">
   <img alt="Wayland" src="https://img.shields.io/badge/wayland-layer--shell-94e2d5">
 </p>
@@ -54,6 +54,7 @@ setu is bluetooth for [Vyom](https://github.com/Theyashsawarkar/vyom): one keybo
 ## Features
 
 - **Connected devices are cards**, two per row, each with a **battery ring**: green, **yellow under 20%** ("charge soon"), **red under 10%** ("plug it in"). When UPower reports several batteries for one device (earbuds left, right and case), each shows on its own.
+- **Earbuds: left, right and the case, each on its own** (any [Google Fast Pair](https://developers.google.com/nearby/fast-pair) buds: Pixel Buds, OnePlus, Sony, JBL, Nothing…). BlueZ only knows one level for them, but Fast Pair buds announce each bud and the case, with a charging flag, in their Bluetooth LE advertisements. While the panel is open setu runs a quiet LE scan of its own and reads them: three gauges side by side (Left · Right · Case, **red at 20% or less, yellow at 40% or less**, a green bolt while charging, — when a part didn't say, e.g. in the closed case) and `L 100 · R 90` on the card. It only listens: nothing is sent to the buds, and the scan stops when the panel closes. A reading not heard for two minutes says "As of …". The advertiser is matched to the connected device by its name; if two connected devices share a name, setu doesn't guess.
 - **Headphones and speakers say what they're doing**: "Playing · high quality" (A2DP) or "Calls · with mic" (HFP/HSP), and which one is the **sound output**. In the preview, Music / Calls switches between the two (`Space v m` / `Space v c`); `Space v o` makes the selected one the sound output (through `pactl`).
 - **Paired devices** that aren't connected say when they were last connected, and "Out of range" when they couldn't be reached.
 - **Nearby devices, closest first**, with signal bars and a word (Close, Near, Far), found while the panel is open (the header says "Looking for devices"). Unnamed beacons hide behind `Space u h`.

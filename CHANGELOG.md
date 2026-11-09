@@ -2,6 +2,11 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## v0.4.0 -- 2026-11-09
+
+- **Earbuds' left, right and case batteries, each on its own**, from Google Fast Pair: the buds announce them (with a charging flag) in their Bluetooth LE advertisements, which setu reads with a quiet LE scan of its own while the panel is open (listening only; the scan stops when it closes). Three gauges side by side in the preview (red at 20% or less, yellow at 40% or less, a green bolt while charging, — for a part that didn't say), `L 100 · R 90` and a ring each on the card. BlueZ's single level stays for devices that don't say more. Matched to the connected device by name; the advertiser's own entry no longer shows in Nearby.
+- `tests/`: the Fast Pair parser (a real OnePlus Nord Buds 3 Pro advertisement, charging, the discoverable form, short and malformed data), run in CI. `SETU_FASTPAIR_FAKE` (a JSON of name → service data) feeds it for screenshots and tests.
+
 ## v0.3.0 -- 2026-11-09
 
 - **Vim keys** (Vyom 0.7): setu opens in NORMAL mode, where letters are keys
