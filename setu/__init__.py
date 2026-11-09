@@ -14,17 +14,29 @@ from gi.repository import GLib, Gtk, Pango
 from vyom import Hint, Row, Section, ui, util
 from vyom import Plugin as Base
 
+from . import vim
+
 from . import audio, bluez
 from .pairing import Session
 
-# keybind: Vyom/bluetooth | Enter | Connect or disconnect the selected device (pairs a new one)
-# keybind: Vyom/bluetooth | Ctrl+O | Set the selected headphones or speaker as the sound output
-# keybind: Vyom/bluetooth | Ctrl+P | Start pairing with the selected device (pair and trust, without connecting)
-# keybind: Vyom/bluetooth | Ctrl+Backspace | Remove (unpair) the selected device (asks first: press it twice)
-# keybind: Vyom/bluetooth | Ctrl+B | Toggle Bluetooth on or off
-# keybind: Vyom/bluetooth | Ctrl+U | Show or hide unnamed nearby devices
+# KEYBINDS (generated from setu/vim.py by scripts/keybinds.py; don't edit by hand)
+# keybind: Vyom/bluetooth:normal | Enter | Connect or disconnect the selected device (pairs a new one)
+# keybind: Vyom/bluetooth:normal | d d | Remove (unpair) the selected device (y confirms)
+# keybind: Vyom/bluetooth:normal | r | Rescan for devices now
+# keybind: Vyom/bluetooth leader:normal | Space p p | Toggle Bluetooth on or off
+# keybind: Vyom/bluetooth leader:normal | Space a a | Start pairing with the selected device, then connect it
+# keybind: Vyom/bluetooth leader:normal | Space a p | Start pairing with the selected device (pair and trust, without connecting)
+# keybind: Vyom/bluetooth leader:normal | Space c c | Connect the selected device
+# keybind: Vyom/bluetooth leader:normal | Space c d | Disconnect the selected device
+# keybind: Vyom/bluetooth leader:normal | Space v o | Set the selected headphones or speaker as the sound output
+# keybind: Vyom/bluetooth leader:normal | Space v m | Switch the selected headphones to music (high quality, no mic)
+# keybind: Vyom/bluetooth leader:normal | Space v c | Switch the selected headphones to calls (with the mic)
+# keybind: Vyom/bluetooth leader:normal | Space u h | Toggle unnamed nearby devices (show or hide them)
+# keybind: Vyom/bluetooth leader:normal | Space y a | Copy the selected device's address
+# keybind: Vyom/bluetooth leader:normal | Space d d | Remove (unpair) the selected device (y confirms)
 # keybind: Vyom/bluetooth-pairing | Enter | Confirm the pairing code matches (or try again after an error)
 # keybind: Vyom/bluetooth-pairing | Esc | Cancel pairing
+# END KEYBINDS
 
 BT, BT_OFF = "\U000f00af", "\U000f00b2"
 ICONS = {"audio-headset": "\U000f02cb", "audio-headphones": "\U000f02cb", "audio-card": "\U000f04c3",
@@ -78,8 +90,11 @@ class Plugin(Base):
     preview = True
     preview_width = 290
     live = 3
-    hints = [Hint("Enter", "connect / disconnect"), Hint("Ctrl+O", "sound output"), Hint("Ctrl+P", "pair"),
-             Hint("Ctrl+Backspace", "remove"), Hint("Ctrl+B", "on / off")]
+    hints = [Hint("Enter", "connect / disconnect"), Hint("Space v o", "sound output"), Hint("Space a p", "pair"),
+             Hint("d d", "remove"), Hint("Space p p", "on / off")]
+    modal = True                # vim keys (Vyom 0.7): NORMAL first, / filters
+    start_mode = "normal"
+    key_groups = vim.GROUPS
     empty_text = ""
 
     def __init__(self, vyom, conf):
@@ -96,7 +111,6 @@ class Plugin(Base):
         self.errors = {}          # mac -> what went wrong last time, in words
         self.unreach = {}         # mac -> when it last couldn't be reached
         self.busy = {}            # mac -> "Connecting…" while an action runs
-        self.removing = None      # (mac, when): Ctrl+Backspace once asks, twice removes
         self.cards = {}
         self.seen = util.load_state("setu-last-connected", {})
         self.seen_saved = 0.0
@@ -107,7 +121,7 @@ class Plugin(Base):
     # ------------------------------------------------------------ header
     def header_extra(self):
         self.chipbox = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER)
-        self.switch = ui.switch(False, self.power, "Bluetooth on or off (Ctrl+B)")
+        self.switch = ui.switch(False, self.power, "Bluetooth on or off (Space p p)")
         self.handler = self.switch.handler
         box = ui.hbox(self.chipbox, self.switch, spacing=10)
         box.set_valign(Gtk.Align.CENTER)
@@ -146,7 +160,6 @@ class Plugin(Base):
     # ------------------------------------------------------------ lifecycle
     def opened(self, args):
         super().opened(args)
-        self.removing = None
         self.start_scan()
 
     def closed(self):
@@ -392,8 +405,6 @@ class Plugin(Base):
         if d.get("kind") != "dev":
             return None
         mac, g = d["mac"], d["group"]
-        if self.removing and (self.removing[0] != mac or time.monotonic() - self.removing[1] > 8):
-            self.removing = None
         a = self.audio.get(mac.upper()) if g == "Connected" else None
         chips = []
         if mac in self.busy:
@@ -411,10 +422,6 @@ class Plugin(Base):
         head = ui.hbox(ui.tile(icon_of(d), "blue", 26, "setu-big-tile"),
                        ui.vbox(ui.title(d["name"]), ui.chips(*chips), spacing=6), spacing=12)
         parts = [head]
-        if self.removing:
-            parts.append(ui.notice(f"Remove {d['name']}?",
-                                   "You'll have to pair it again to use it. Ctrl+Backspace again removes it, "
-                                   "Esc keeps it.", "red"))
         if mac in self.errors:
             parts.append(ui.notice("Didn't work", self.errors[mac], "red"))
         for lab, p in self.batteries(d):
@@ -427,6 +434,7 @@ class Plugin(Base):
                 cur = a["mode"] if a["mode"] in ("music", "calls") else ""
                 box.append(ui.segmented([("music", "Music · high quality"), ("calls", "Calls · with mic")], cur,
                                         lambda k, d=d: self.set_mode(d, k)))
+                box.append(ui.label("Space v m music · Space v c calls", "meter-name", xalign=0))
             else:
                 box.append(ui.label(audio.doing(a), "p-body", xalign=0))
             parts.append(ui.soft(*box, spacing=8))
@@ -449,16 +457,15 @@ class Plugin(Base):
         if g == "Connected":
             first = [("Disconnect", lambda: self.act(d), "", LINK_OFF, "Enter")]
             if a and not a["default"]:
-                rows.append(ui.buttons([("Make sound output", lambda: self.output(d), "", VOLUME, "Ctrl+O")]))
+                rows.append(ui.buttons([("Make sound output", lambda: self.output(d), "", VOLUME, "Space v o")]))
         elif g == "Paired":
             first = [("Connect", lambda: self.act(d), "primary", LINK, "Enter")]
         else:
             first = [("Pair & connect", lambda: self.act(d), "primary", LINK, "Enter")]
             rows.append(ui.buttons(first))
-            rows.append(ui.buttons([("Pair only", lambda: self.pair(d, False), "", "", "Ctrl+P")]))
+            rows.append(ui.buttons([("Pair only", lambda: self.pair(d, False), "", "", "Space a p")]))
             return ui.vbox(*rows, spacing=8)
-        rem = ("Yes, remove" if self.removing else "Remove", lambda: self.remove(d), "danger", DELETE,
-               "Ctrl+Backspace")
+        rem = ("Remove", lambda: self.remove(d), "danger", DELETE, "d d")
         rows.insert(0, ui.buttons(first))
         rows.append(ui.buttons([rem]))
         return ui.vbox(*rows, spacing=8)
@@ -503,15 +510,11 @@ class Plugin(Base):
             self.panel.refresh_now(keep_selection=True)
 
     def remove(self, d):
-        if not self.removing or self.removing[0] != d["mac"]:
-            self.removing = (d["mac"], time.monotonic())
-            self.set_status("Ctrl+Backspace again removes it · Esc keeps it")
-            if self.panel:
-                self.panel.update_preview()
-            return
-        self.removing = None
-        self.set_status(f"removing {d['name']}…")
-        self.background(lambda: bluez.bt("remove", d["mac"]), lambda _r: (self.set_status(""), self.refresh()))
+        """Asks first (y removes, any other key keeps it): it has to be paired again to use it."""
+        def go():
+            self.set_status(f"removing {d['name']}…")
+            self.background(lambda: bluez.bt("remove", d["mac"]), lambda _r: (self.set_status(""), self.refresh()))
+        self.confirm(f"Remove {d['name']}? You'll have to pair it again to use it.", go)
 
     def output(self, d):
         a = self.audio.get(d["mac"].upper())
@@ -705,33 +708,75 @@ class Plugin(Base):
                 else:
                     s.cancel()
                 return True
-            return "ctrl" in mods      # no other actions while pairing
-        if name == "Escape" and self.removing:
-            self.removing = None
-            self.set_status("")
-            if self.panel:
-                self.panel.update_preview()
-            return True
-        st = self.adapter.get("state")
-        if name in ("Return", "KP_Enter") and st == "off":
+            return True      # nothing else while pairing (the card says Enter / Esc)
+        if name in ("Return", "KP_Enter") and self.adapter.get("state") == "off":
             self.power(True)
             return True
-        if "ctrl" not in mods:
-            return False
+        return False
+
+    # ------------------------------------------------------------ vim keys
+    def keys(self, tab):
+        return vim.keys(tab)
+
+    def device(self, paired=False):
+        """The selected device's data, or None (with a word why)."""
+        row = self.panel.selected_row() if self.panel else None
         d = (row.data or {}) if row else {}
-        dev = d.get("kind") == "dev"
-        if name == "b":
-            if st in ("ok", "off"):
-                self.power(st == "off")
-        elif name == "u":
-            self.show_unnamed = not self.show_unnamed
-            self.refresh_keep()
-        elif name == "o" and dev:
-            self.output(d)
-        elif name == "p" and dev:
-            self.pair(d, False)
-        elif name == "BackSpace" and dev and d.get("group") != "Nearby":
-            self.remove(d)
+        if d.get("kind") != "dev":
+            self.set_status("no device selected", "bad")
+            return None
+        if paired and d.get("group") == "Nearby":
+            self.set_status(f"{d['name']} isn't paired", "bad")
+            return None
+        return d
+
+    def v_power(self, _n, _a):
+        st = self.adapter.get("state")
+        if st in ("ok", "off"):
+            self.power(st == "off")
         else:
-            return False
-        return True
+            self.set_status("no Bluetooth adapter to turn on", "bad")
+
+    def v_pair(self, _n, how):
+        if (d := self.device()):
+            self.pair(d, how == "connect")
+
+    def v_conn(self, _n, want):
+        if not (d := self.device()):
+            return
+        on = d.get("group") == "Connected"
+        if (want == "on") == on:
+            self.set_status(f"{d['name']} is already {'connected' if on else 'disconnected'}")
+            return
+        self.act(d)
+
+    def v_output(self, _n, _a):
+        if (d := self.device(paired=True)):
+            self.output(d)
+
+    def v_audiomode(self, _n, mode):
+        if not (d := self.device(paired=True)):
+            return
+        a = self.audio.get(d["mac"].upper())
+        if not a or not (a.get("music") and a.get("calls")):
+            self.set_status(f"{d['name']} has no music / calls modes (or isn't connected)", "bad")
+            return
+        self.set_mode(d, mode)
+
+    def v_unnamed(self, _n, _a):
+        self.show_unnamed = not self.show_unnamed
+        self.set_status("showing unnamed devices" if self.show_unnamed else "unnamed devices hidden", "ok")
+        self.refresh_keep()
+
+    def v_copy(self, _n, _a):
+        if (d := self.device()):
+            util.copy(d["mac"])
+            self.set_status(f"copied {d['mac']}", "ok")
+
+    def v_remove(self, _n, _a):
+        if (d := self.device(paired=True)):
+            self.remove(d)
+
+    def v_refresh(self, _n, _a):
+        self.start_scan()
+        self.refresh_keep()

@@ -2,6 +2,29 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## v0.3.0 -- 2026-11-09
+
+- **Vim keys** (Vyom 0.7): setu opens in NORMAL mode, where letters are keys
+  and typing changes nothing; `/` (or `i`) types a filter, `Esc` goes back.
+  `Space` is the leader, with a which-key strip; `?` lists every key and
+  `Space Space` is a palette of every action.
+- **New keys**: `Space p p` turns Bluetooth on or off, `Space a a` / `a p`
+  pair and connect / pair only, `Space c c` / `c d` connect / disconnect,
+  `Space v o` makes it the sound output, **`Space v m` / `v c` switch
+  headphones to music / calls** (that switch was mouse-only), `Space u h`
+  shows unnamed devices, `Space y a` copies the address, `r` rescans.
+- **Remove asks with one question**: `dd` (or `Space d d`) asks
+  "Remove …?", `y` removes and any other key keeps it, instead of pressing
+  twice.
+- **Typing is safe**: `Ctrl+Backspace` deletes a word in the filter again
+  (it removed a device); it now says remove moved to `dd`. `Ctrl+U` scrolls
+  half a page up, as in every vim tool (unnamed devices: `Space u h`).
+  `Ctrl+B`, `Ctrl+O` and `Ctrl+P` still work.
+- While a pairing runs, every key but `Enter` and `Esc` is ignored.
+- Keys are data (`setu/vim.py`); `scripts/keybinds.py` writes the
+  `# keybind:` lines and the README table from it (`--check` in CI).
+- Needs Vyom 0.7.0.
+
 ## v0.2.1 -- 2026-11-08
 
 - The Bluetooth switch is Vyom's `ui.switch()` (Vyom 0.6.2), with its own fix for GTK's
