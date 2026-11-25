@@ -4,6 +4,7 @@ Newest first. Releases are tags (`vX.Y.Z`).
 
 ## Unreleased
 
+- **A calmer Bluetooth panel.** The header says only what's unusual ("Visible as …" when others can find this computer; "Searching" while it looks), not "Named … · hidden" every time. Device cards have a lit edge, and the one you're on is brighter glass with a light rim instead of a thick white frame. The device's details are one quiet list, and its buttons sit side by side (Disconnect and Remove, Connect and Remove, Pair & connect and Pair only).
 - The website, closer to Vayu's own: the tool's screenshot blurred behind the page, a centred hero with the logo and the verse, the page you're on as the white pill, glass "On this page" and footer panels, releases as cards. No glow behind the logo, no coloured line beside the verse.
 - **Spatial look**: rounder, borderless glass cards, gauges and pairing card; an unknown earbud gauge is drawn dashed.
 - The website has Vayu's Spatial look: graphite glass, a floating navigation bar, near-white for links and the main button, and the tool's own colour only as its signature (the logo's glow, the shloka's line, the release dots). No more all-caps labels.

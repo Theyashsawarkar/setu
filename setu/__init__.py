@@ -98,7 +98,7 @@ class Plugin(Base):
     name, title, icon, color = "setu", "Bluetooth", BT, "blue"
     placeholder = "Filter devices…"
     preview = True
-    preview_width = 290
+    preview_width = 330
     live = 3
     hints = [Hint("Enter", "connect / disconnect"), Hint("Space v o", "sound output"), Hint("Space a p", "pair"),
              Hint("d d", "remove"), Hint("Space p p", "on / off")]
@@ -152,16 +152,14 @@ class Plugin(Base):
             while (c := self.chipbox.get_first_child()) is not None:
                 self.chipbox.remove(c)
             if a.get("state") == "ok" and not self.session:
+                # Only what's unusual is said: this computer can be found by others.
                 if a.get("discoverable"):
-                    self.chipbox.append(ui.chip(f"Visible as {a['alias']}", "gray", EYE))
-                else:
-                    c = ui.chip(f"Named {a['alias']} · hidden", "gray", EYE_OFF)
-                    c.set_tooltip_text("Other devices can't find this computer by searching, "
-                                       "but pairing from here works")
-                    self.chipbox.append(c)
+                    self.chipbox.append(ui.chip(f"Visible as {a['alias']}", "yellow", EYE))
                 if a.get("discovering"):
                     dot = ui.label("●", "setu-pulse")
-                    scan = ui.hbox(dot, ui.label("Looking for devices"), spacing=6, cls="chip")
+                    scan = ui.hbox(dot, ui.label("Searching"), spacing=6, cls="chip")
+                    scan.set_tooltip_text(f"Finding devices nearby. Others can't find {a['alias']} "
+                                          "by searching, but pairing from here works.")
                     scan.add_css_class("c-yellow")
                     scan.set_valign(Gtk.Align.CENTER)
                     self.chipbox.append(scan)
@@ -464,8 +462,9 @@ class Plugin(Base):
             chips.append(("Sound output", "peach", VOLUME))
         if g == "Paired" and mac in self.unreach:
             chips.append(("Out of range", "gray"))
-        head = ui.hbox(ui.tile(icon_of(d), "blue", 26, "setu-big-tile"),
-                       ui.vbox(ui.title(d["name"]), ui.chips(*chips), spacing=6), spacing=12)
+        head = ui.hbox(ui.tile(icon_of(d), "blue" if g != "Nearby" else "gray", 26, "setu-big-tile"),
+                       ui.vbox(ui.label(d["name"], "setu-title", xalign=0, ellipsize=Pango.EllipsizeMode.END),
+                               ui.chips(*chips), spacing=6), spacing=14)
         parts = [head]
         if mac in self.errors:
             parts.append(ui.notice("Didn't work", self.errors[mac], "red"))
@@ -494,7 +493,8 @@ class Plugin(Base):
             lvl, word, _col = signal(d["rssi"])
             kv.append(("Signal", f"{word} · {d['rssi']} dBm" if lvl >= 0 else "Not heard just now"))
         kv.append(("Address", mac))
-        parts.append(ui.kv(kv))
+        facts = ui.kv(kv, wrap=False)
+        parts.append(ui.vbox(facts, cls="setu-facts"))
         parts.append(self.preview_buttons(d, a))
         return ui.vbox(*parts, spacing=12)
 
@@ -532,23 +532,20 @@ class Plugin(Base):
         return ui.vbox(head, row, spacing=8, cls="soft")
 
     def preview_buttons(self, d, a):
+        """What you can do, side by side: the main action first (white), then
+        the sound output, then Remove (red, d d asks first)."""
         g = d["group"]
-        rows = []
-        if g == "Connected":
-            first = [("Disconnect", lambda: self.act(d), "", LINK_OFF, "Enter")]
-            if a and not a["default"]:
-                rows.append(ui.buttons([("Make sound output", lambda: self.output(d), "", VOLUME, "Space v o")]))
-        elif g == "Paired":
-            first = [("Connect", lambda: self.act(d), "primary", LINK, "Enter")]
-        else:
-            first = [("Pair & connect", lambda: self.act(d), "primary", LINK, "Enter")]
-            rows.append(ui.buttons(first))
-            rows.append(ui.buttons([("Pair only", lambda: self.pair(d, False), "", "", "Space a p")]))
-            return ui.vbox(*rows, spacing=8)
         rem = ("Remove", lambda: self.remove(d), "danger", DELETE, "d d")
-        rows.insert(0, ui.buttons(first))
-        rows.append(ui.buttons([rem]))
-        return ui.vbox(*rows, spacing=8)
+        if g == "Connected":
+            first = ("Disconnect", lambda: self.act(d), "", LINK_OFF, "Enter")
+            if a and not a["default"]:
+                return ui.vbox(ui.buttons([("Make sound output", lambda: self.output(d), "primary", VOLUME, "Space v o")]),
+                               ui.buttons([first, rem]), spacing=8)
+            return ui.buttons([first, rem])
+        if g == "Paired":
+            return ui.buttons([("Connect", lambda: self.act(d), "primary", LINK, "Enter"), rem])
+        return ui.buttons([("Pair & connect", lambda: self.act(d), "primary", LINK, "Enter"),
+                           ("Pair only", lambda: self.pair(d, False), "", "", "Space a p")])
 
     # ------------------------------------------------------------ actions
     def act(self, d):
