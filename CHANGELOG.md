@@ -2,6 +2,11 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## Unreleased
+
+- **Spatial look**: rounder, borderless glass cards, gauges and pairing card; an unknown earbud gauge is drawn dashed.
+- The website has Vayu's Spatial look: graphite glass, a floating navigation bar, near-white for links and the main button, and the tool's own colour only as its signature (the logo's glow, the shloka's line, the release dots). No more all-caps labels.
+
 ## v0.4.0 -- 2026-11-09
 
 - **Earbuds' left, right and case batteries, each on its own**, from Google Fast Pair: the buds announce them (with a charging flag) in their Bluetooth LE advertisements, which setu reads with a quiet LE scan of its own while the panel is open (listening only; the scan stops when it closes). Three gauges side by side in the preview (red at 20% or less, yellow at 40% or less, a green bolt while charging, — for a part that didn't say), `L 100 · R 90` and a ring each on the card. BlueZ's single level stays for devices that don't say more. Matched to the connected device by name; the advertiser's own entry no longer shows in Nearby.
