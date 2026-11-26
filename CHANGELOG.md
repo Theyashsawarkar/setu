@@ -2,8 +2,10 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
-## Unreleased
+## v0.5.0 -- 2026-11-26
 
+- **A new look: the picked device, big.** No more cards and rings: connected devices are the list's first rows, each with its battery at the right (the lower bud for earbuds) and a peach speaker mark on the sound output. The device you pick shows on the right as a showcase: its icon in glass, its name and state, the batteries as one strip of numbers (Left · Right · Case for earbuds), the audio mode, round buttons with their keys under them, and one quiet line of details. "Pair only" has its own icon.
+- **Works every time, no reboot.** Connecting tries again (up to three times) when BlueZ fails in a way a second try fixes, and counts a device that connected despite an error as connected; a device that's away gets one more try, a refusal none. A chip that stopped answering (after sleep, mostly) shows "Bluetooth isn't answering" with **Reset** (`Enter`): it restarts the controller with an rfkill block and unblock, no root and no reboot. The NotReady error names Space p p, not the old Ctrl+B.
 - **Turning Bluetooth on lifts a soft block.** When Bluetooth was blocked by rfkill (or switched off somewhere else), Turn on only told you to run `rfkill unblock bluetooth`; now it does that itself and turns the adapter on, and says so if a switch or the airplane-mode key is what's blocking it. The Turn on button shows Enter, not the old Ctrl+B.
 - The panel no longer opens wider than the others when earbuds report every battery (it now fits the card: "L 82% · R 76% · Case 34%"); the playing line uses the card's room before it cuts off; the Nearby hint names the real key to show unnamed devices (Space u h, not Ctrl+U).
 - New screenshots in the Spatial look, taken with made-up demo data (WebP, sharp on high-density screens).

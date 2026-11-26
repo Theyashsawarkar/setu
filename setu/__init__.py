@@ -1,8 +1,8 @@
 """setu (सेतु, "bridge"): Bluetooth for Vyom, through BlueZ (bluetoothctl).
 
-Connected devices are cards at the top, each with its battery ring and,
-for headphones and speakers, what they're doing (music in high quality or
-calls with the mic). Below: paired devices that aren't connected, and the
+Connected devices come first in the list, each with its battery and, for
+headphones and speakers, what they're doing (music in high quality or
+calls with the mic); the one picked shows big on the right. Below: paired devices that aren't connected, and the
 devices nearby (found while the panel is open), closest first. Pairing is
 a step of its own: the 6-digit code shown big, to compare with the device.
 """
@@ -42,7 +42,7 @@ ICONS = {"audio-headset": "\U000f02cb", "audio-headphones": "\U000f02cb", "audio
          "video-display": "\U000f0379", "multimedia-player": "\U000f075a"}
 CHECK, VOLUME, EYE, EYE_OFF, CASE = "\U000f012c", "\U000f057e", "\U000f0208", "\U000f0209", "\U000f03d7"
 LINK, LINK_OFF, DELETE, CLOSE, POWER = "\U000f0337", "\U000f0338", "\U000f01b4", "\U000f0156", "\U000f0425"
-BOLT = "\U000f0241"
+BOLT, BATTERY = "\U000f0241", "\U000f0079"
 PART_NAMES = {"left": "Left", "right": "Right", "case": "Case"}
 SHORT = {"Left": "L", "Right": "R"}   # a card's battery line: "L 82% · R 76% · Case 34%"
 
@@ -118,11 +118,11 @@ class Plugin(Base):
         self.ubats = {}
         self.hidden = 0
         self.show_unnamed = False
+        self.resetting = False
         self.session = None
         self.errors = {}          # mac -> what went wrong last time, in words
         self.unreach = {}         # mac -> when it last couldn't be reached
         self.busy = {}            # mac -> "Connecting…" while an action runs
-        self.cards = {}
         self.seen = util.load_state("setu-last-connected", {})
         self.seen_saved = 0.0
         self.fp = fastpair.Scanner()   # left / right / case from Fast Pair advertisements
@@ -276,7 +276,8 @@ class Plugin(Base):
                 d["group"] = "Nearby"
                 near.append(d)
         near.sort(key=lambda d: (d["rssi"] is None, -(d["rssi"] or 0), d["name"].lower()))
-        rows = [self.row(d) for d in conn]          # shown as cards in the strip
+        rows = [Section("Connected", len(conn), "Enter disconnects")] if conn else []
+        rows += [self.row(d) for d in conn]
         if paired:
             rows.append(Section("Paired, not connected", len(paired), "Enter connects"))
             rows += [self.row(d) for d in paired]
@@ -325,7 +326,20 @@ class Plugin(Base):
                 sub += " · not heard just now"
             return Row(d["name"], sub, icon=icon_of(d), color="gray", chips=chips, level=lvl, level_text=word,
                        level_color=col, data={"kind": "dev", **d})
-        return Row(d["name"], kind, icon=icon_of(d), color="blue", data={"kind": "dev", **d})
+        # Connected: what it's doing (or what it is), the sound output as a
+        # peach mark after the name, its battery at the right (the lower bud
+        # for earbuds), green / yellow / red by charge.
+        a = self.audio.get(mac.upper())
+        bats = self.batteries(d)
+        meta, mcol = "", ""
+        if bats:
+            buds = [p for lab, p in bats if lab != "Case"] or [p for _, p in bats]
+            low = min(buds)
+            meta, mcol = f"{BATTERY} {low}%", charge(low)[0]
+        r = Row(d["name"], audio.doing(a) if a else kind, icon=icon_of(d), color="blue", chips=chips,
+                badge=VOLUME if a and a["default"] else "", badge_color="peach", meta=meta, data={"kind": "dev", **d})
+        r.meta_color = mcol      # Vyom 0.8.1 colours it; an older one shows it plain
+        return r
 
     # ------------------------------------------------------------ the strip
     def build_strip(self):
@@ -340,10 +354,13 @@ class Plugin(Base):
         if st == "nodaemon":
             return self.trouble("The Bluetooth service isn't running",
                                 "Start it: systemctl enable --now bluetooth.", "red")
+        if st == "stuck":
+            return self.trouble_fix("Bluetooth isn't answering",
+                                    "The chip or the service stopped responding. Reset wakes it again, no reboot needed.")
         if st == "none":
-            return self.trouble("No Bluetooth adapter found",
-                                "Is it plugged in, or blocked? rfkill unblock bluetooth, or the airplane-mode key.",
-                                "red")
+            return self.trouble_fix("No Bluetooth adapter found",
+                                    "It may have stopped after sleep. Reset tries to wake it; if it's a USB "
+                                    "adapter, check it's plugged in.")
         if st == "off":
             body = ui.vbox(ui.label("Bluetooth is off", "hero-title", xalign=0),
                            ui.label("Your devices can't connect until it's on.", "hero-sub", xalign=0), spacing=4)
@@ -351,28 +368,17 @@ class Plugin(Base):
             return ui.hero(ui.tile(BT_OFF, "gray", 22, "tile"), body,
                            ui.button("Turn on", lambda: self.power(True), "primary", POWER, "Enter"),
                            color="gray")
-        # Bluetooth is on: the connected devices as cards, two per row.
+        # Bluetooth is on: connected devices are the list's first rows (A1,
+        # 2026-11-26); the strip only speaks when nothing is connected.
         items = self.panel.items if self.panel else []
-        conn = [(i, r) for i, (r, w) in enumerate(items) if (r.data or {}).get("group") == "Connected"]
-        for _i, (r, w) in enumerate(items):
-            if (r.data or {}).get("group") == "Connected":
-                w.set_visible(False)       # the card stands for it
-        self.cards = {}
-        if not conn:
-            if self.panel and self.query():
-                return None
-            body = ui.vbox(ui.label("Nothing connected", "hero-title", xalign=0),
-                           ui.label("Pick a device below and press Enter to connect it.", "hero-sub", xalign=0),
-                           spacing=4)
-            return ui.hero(ui.tile(BT, "blue", 22, "tile"), body, color="gray")
-        grid = Gtk.Grid(column_spacing=10, row_spacing=10, column_homogeneous=True)
-        for n, (i, r) in enumerate(conn):
-            card = self.card(r.data, i)
-            grid.attach(card, n % 2, n // 2, 1, 1)
-        if len(conn) == 1:
-            grid.attach(Gtk.Box(), 1, 0, 1, 1)
-        self.highlight()
-        return ui.vbox(ui.section("Connected", len(conn), "Enter disconnects"), grid, spacing=6)
+        if any((r.data or {}).get("group") == "Connected" for r, _w in items):
+            return None
+        if self.panel and self.query():
+            return None
+        body = ui.vbox(ui.label("Nothing connected", "hero-title", xalign=0),
+                       ui.label("Pick a device below and press Enter to connect it.", "hero-sub", xalign=0),
+                       spacing=4)
+        return ui.hero(ui.tile(BT, "blue", 22, "tile"), body, color="gray")
 
     def query(self):
         try:
@@ -380,85 +386,40 @@ class Plugin(Base):
         except AttributeError:
             return ""
 
+    def trouble_fix(self, title, text):
+        """A trouble card with a Reset button (Enter) that wakes the chip."""
+        body = ui.vbox(ui.label(title, "hero-title", xalign=0),
+                       ui.label(text, "hero-sub", xalign=0, wrap=True), spacing=4)
+        body.set_hexpand(True)
+        return ui.hero(ui.tile(BT_OFF, "yellow", 22, "tile"), body,
+                       ui.button("Reset Bluetooth", self.reset, "primary", POWER, "Enter"), color="yellow")
+
+    def reset(self):
+        if self.resetting:
+            return
+        self.resetting = True
+        self.set_status("resetting Bluetooth…")
+
+        def done(st):
+            self.resetting = False
+            if st in ("ok", "off"):
+                self.set_status("")
+            else:
+                self.set_status("Bluetooth still isn't answering: a reboot may be needed", "bad")
+            self.refresh()
+        self.background(bluez.reset, done)
+
     def trouble(self, title, text, color):
         n = ui.notice(title, text, color)
         n.add_css_class("setu-trouble")
         return n
 
-    def card(self, d, index):
-        bats = self.batteries(d)
-        glyph = ui.label(icon_of(d), "glyph", "setu-card-icon")
-        if len(bats) == 1:
-            p = bats[0][1]
-            visual = ui.ring(p / 100, charge(p)[0], 58, 5, glyph)
-        elif bats:
-            rings = []
-            for lab, p in bats:
-                inner = ui.label(CASE if lab.lower() == "case" else (lab[:1] or "?"), "setu-mini")
-                col = part_color(p) if d.get("fp") else charge(p)[0]
-                rings.append(ui.ring(p / 100, col, 40, 4, inner))
-            visual = ui.hbox(*rings, spacing=4)
-        else:
-            visual = ui.tile(icon_of(d), "blue", 22, "setu-noring")
-        lines = [ui.label(d["name"], "setu-card-name", xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10)]
-        if len(bats) == 1:
-            p = bats[0][1]
-            col, words = charge(p)
-            lines.append(ui.label(f"{p}%" + (f" · {words}" if words else ""), f"t-{col}", "setu-card-line",
-                                  xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
-        elif bats and d.get("fp"):
-            parts = d["fp"]["parts"]
-            worst = min((p["level"] for p in parts.values() if p["level"] is not None), default=100)
-            col = part_color(worst)
-            lines.append(ui.label(fastpair.compact(parts), "setu-card-line", f"t-{col}",
-                                  xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
-        elif bats:
-            ok = [f"{SHORT.get(lab, lab)} {p}%" for lab, p in bats if charge(p)[0] == "green"]
-            low = [(lab, p) for lab, p in bats if charge(p)[0] != "green"]
-            if ok:
-                lines.append(ui.label(" · ".join(ok), "setu-card-line", xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
-            for lab, p in low:
-                col, words = charge(p)
-                lines.append(ui.label(f"{lab} {p}% · {words}", f"t-{col}", "setu-card-line", xalign=0,
-                                      ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
-        a = self.audio.get(d["mac"].upper())
-        if a:
-            what = ui.hbox(ui.label(VOLUME, "glyph", "t-peach" if a["default"] else "t-gray"),
-                           ui.label(audio.doing(a), "setu-card-line", ellipsize=Pango.EllipsizeMode.END, max_width_chars=10, hexpand=True, xalign=0), spacing=5)
-            lines.append(what)
-        else:
-            lines.append(ui.label(bluez.kind(d), "setu-card-line", "setu-quiet", xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
-        text = ui.vbox(*lines[:3], spacing=2)
-        text.set_hexpand(True)
-        text.set_valign(Gtk.Align.CENTER)
-        card = ui.hbox(visual, text, spacing=12, cls="setu-card")
-        low = [p for _, p in bats if p < 10]
-        if low:
-            card.add_css_class("setu-card-low")
-        click = Gtk.GestureClick()
-        click.connect("pressed", lambda g, n, _x, _y, i=index: self.card_clicked(i, n))
-        card.add_controller(click)
-        self.cards[d["mac"]] = card
-        return card
-
-    def card_clicked(self, index, n):
-        if self.panel:
-            self.panel.select(index)
-            if n == 2:
-                self.panel.activate(index, set())
-
-    def highlight(self):
-        row = self.panel.selected_row() if self.panel else None
-        mac = (row.data or {}).get("mac") if row else None
-        for m, c in self.cards.items():
-            if m == mac:
-                c.add_css_class("setu-picked")
-            else:
-                c.remove_css_class("setu-picked")
-
     # ------------------------------------------------------------ the preview
     def build_preview(self, row):
-        self.highlight()
+        """A1, the showcase (2026-11-26): the device as a big glass icon, its
+        name and state under it, the batteries as one strip of numbers, the
+        audio mode, then round buttons with their keys, and one quiet line
+        of details at the bottom."""
         d = row.data or {}
         if d.get("kind") != "dev":
             return None
@@ -477,90 +438,120 @@ class Plugin(Base):
             chips.append(("Sound output", "peach", VOLUME))
         if g == "Paired" and mac in self.unreach:
             chips.append(("Out of range", "gray"))
-        head = ui.hbox(ui.tile(icon_of(d), "blue" if g != "Nearby" else "gray", 26, "setu-big-tile"),
-                       ui.vbox(ui.label(d["name"], "setu-title", xalign=0, ellipsize=Pango.EllipsizeMode.END),
-                               ui.chips(*chips), spacing=6), spacing=14)
-        parts = [head]
+        icon = ui.label(icon_of(d), "glyph", "setu-hero-glyph")
+        hero = Gtk.Box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        hero.add_css_class("setu-hero-icon")
+        if g == "Nearby":
+            hero.add_css_class("setu-hero-quiet")
+        icon.set_hexpand(True)
+        hero.append(icon)
+        name = ui.label(d["name"], "setu-hero-name", justify=Gtk.Justification.CENTER,
+                        ellipsize=Pango.EllipsizeMode.END, max_width_chars=10)
+        chiprow = Gtk.Box(spacing=6, halign=Gtk.Align.CENTER)
+        for c in chips:
+            chiprow.append(ui.chip(*c))
+        parts = [hero, ui.vbox(name, chiprow, spacing=8)]
         if mac in self.errors:
             parts.append(ui.notice("Didn't work", self.errors[mac], "red"))
-        if d.get("fp"):
-            parts.append(self.gauges(d["fp"]))
-        for lab, p in ([] if d.get("fp") else self.batteries(d)):
-            col, words = charge(p)
-            parts.append(ui.meter(f"{lab} battery".strip().capitalize() if lab else "Battery",
-                                  f"{p}%" + (f" · {words}" if words else ""), p / 100, col))
+        strip = self.stats(d)
+        if strip is not None:
+            parts.append(strip)
         if a:
-            box = [ui.label("Audio", "meter-name", xalign=0)]
             if a["music"] and a["calls"]:
                 cur = a["mode"] if a["mode"] in ("music", "calls") else ""
-                box.append(ui.segmented([("music", "Music · high quality"), ("calls", "Calls · with mic")], cur,
-                                        lambda k, d=d: self.set_mode(d, k)))
-                box.append(ui.label("Space v m music · Space v c calls", "meter-name", xalign=0))
+                seg = ui.segmented([("music", "Music · high quality"), ("calls", "Calls · with mic")], cur,
+                                   lambda k, d=d: self.set_mode(d, k))
+                seg.set_tooltip_text("Space v m music · Space v c calls")
+                parts.append(seg)
             else:
-                box.append(ui.label(audio.doing(a), "p-body", xalign=0))
-            parts.append(ui.soft(*box, spacing=8))
-        kv = [("Type", bluez.kind(d))]
+                parts.append(ui.label(audio.doing(a), "setu-hero-meta", justify=Gtk.Justification.CENTER))
+        parts.append(self.actions(d, a))
+        meta = [bluez.kind(d)]
         if g != "Nearby":
-            kv.append(("Trusted", "Yes · reconnects by itself" if d.get("Trusted") == "yes" else "No"))
+            meta.append("trusted" if d.get("Trusted") == "yes" else "not trusted")
         if g == "Paired" and mac in self.seen:
-            kv.append(("Last connected", ago(self.seen[mac])))
+            meta.append(f"last connected {ago(self.seen[mac])}")
         if g == "Nearby":
             lvl, word, _col = signal(d["rssi"])
-            kv.append(("Signal", f"{word} · {d['rssi']} dBm" if lvl >= 0 else "Not heard just now"))
-        kv.append(("Address", mac))
-        facts = ui.kv(kv, wrap=False)
-        parts.append(ui.vbox(facts, cls="setu-facts"))
-        parts.append(self.preview_buttons(d, a))
-        return ui.vbox(*parts, spacing=12)
+            meta.append(f"{word.lower()} · {d['rssi']} dBm" if lvl >= 0 else "not heard just now")
+        meta.append(mac)
+        foot = ui.label(" · ".join(meta), "setu-hero-meta", justify=Gtk.Justification.CENTER, wrap=True)
+        foot.set_vexpand(True)
+        foot.set_valign(Gtk.Align.END)
+        parts.append(foot)
+        box = ui.vbox(*parts, spacing=18, cls="setu-stage")
+        box.set_vexpand(True)
+        return box
 
-    def gauges(self, reading):
-        """Left · Right · Case, side by side: the level big, a bar, a bolt
-        when charging, — when the bud didn't say (in the case, or closed)."""
+    def stats(self, d):
+        """The batteries as one calm strip: a number, a thin line under it,
+        the name. Earbuds show left, right and case (— when one didn't say:
+        in the case, or the case closed); anything else its one battery."""
         cells = []
-        for key in fastpair.PARTS:
-            p = reading["parts"][key]
-            lvl, col = p["level"], part_color(p["level"])
-            name = ui.label(PART_NAMES[key], "setu-gauge-name", xalign=0, hexpand=True)
-            head = ui.hbox(name, spacing=4)
-            if p["charging"] and lvl is not None:
-                head.append(ui.label(BOLT, "glyph", "t-green", "setu-bolt"))
+        fp = d.get("fp")
+        if fp:
+            for key in fastpair.PARTS:
+                p = fp["parts"][key]
+                cells.append((PART_NAMES[key], p["level"], p["charging"]))
+        else:
+            for lab, p in self.batteries(d):
+                cells.append((lab or "Battery", p, False))
+        if not cells:
+            return None
+        grid = Gtk.Grid(column_homogeneous=True)
+        grid.add_css_class("setu-stats")
+        for i, (lab, lvl, charging) in enumerate(cells):
+            col = (part_color(lvl) if fp else charge(lvl)[0]) if lvl is not None else "gray"
             if lvl is None:
-                num = ui.label("—", "setu-gauge-num", "setu-quiet", xalign=0)
+                num = ui.label("—", "setu-stat-num", "setu-quiet")
             else:
-                num = ui.hbox(ui.label(str(lvl), "setu-gauge-num", f"t-{col}", xalign=0),
-                              ui.label("%", "setu-gauge-unit", f"t-{col}", valign=Gtk.Align.END), spacing=1)
-            bar = ui.progress((lvl or 0) / 100, col if lvl is not None else "gray")
-            cell = ui.vbox(head, num, bar, spacing=4, cls="setu-gauge")
+                num = ui.hbox(ui.label(str(lvl), "setu-stat-num"), ui.label("%", "setu-stat-unit", valign=Gtk.Align.END),
+                              spacing=1)
+                num.set_halign(Gtk.Align.CENTER)
+                if charging:
+                    num.append(ui.label(BOLT, "glyph", "t-green", "setu-bolt", valign=Gtk.Align.CENTER))
+            bar = ui.progress((lvl or 0) / 100, col)
+            cell = ui.vbox(num, bar, ui.label(lab, "setu-stat-name"), spacing=7, cls="setu-stat")
+            if i:
+                cell.add_css_class("setu-stat-next")
             if lvl is None:
-                cell.add_css_class("setu-gauge-unknown")
                 cell.set_tooltip_text("Not reported: in the case, or the case is closed")
-            elif p["charging"]:
-                cell.set_tooltip_text(f"{PART_NAMES[key]}: {lvl}%, charging")
-            cells.append(cell)
-        row = Gtk.Grid(column_spacing=8, column_homogeneous=True)
-        for i, c in enumerate(cells):
-            row.attach(c, i, 0, 1, 1)
-        age = time.time() - reading["at"]
-        note = "From the buds' Fast Pair broadcast" if age < fastpair.STALE else f"As of {ago(reading['at'])}: not heard since"
-        head = ui.hbox(ui.label("Battery", "meter-name", xalign=0, hexpand=True),
-                       ui.label(note, "p-meta", "setu-gauge-note"), spacing=8)
-        return ui.vbox(head, row, spacing=8, cls="soft")
+            grid.attach(cell, i, 0, 1, 1)
+        return grid
 
-    def preview_buttons(self, d, a):
-        """What you can do, side by side: the main action first (white), then
-        the sound output, then Remove (red, d d asks first)."""
+    def round_action(self, glyph, text, keys, callback, kind=""):
+        """A round glass button, its name and its keys under it."""
+        b = Gtk.Button(halign=Gtk.Align.CENTER)
+        b.add_css_class("setu-round")
+        if kind:
+            b.add_css_class(f"setu-round-{kind}")
+        b.set_child(ui.label(glyph, "glyph"))
+        b.set_tooltip_text(f"{text} ({keys})")
+        b.connect("clicked", lambda *_: callback())
+        cap = ui.keycap(keys)
+        cap.set_halign(Gtk.Align.CENTER)
+        return ui.vbox(b, ui.label(text, "setu-round-name"), cap, spacing=6, cls="setu-act")
+
+    def actions(self, d, a):
+        """What you can do: the main action, the sound output for audio, then
+        Remove in red (d d asks first). White is the one Enter does when it
+        isn't a disconnect."""
         g = d["group"]
-        rem = ("Remove", lambda: self.remove(d), "danger", DELETE, "d d")
+        rem = (DELETE, "Remove", "d d", lambda: self.remove(d), "danger")
         if g == "Connected":
-            first = ("Disconnect", lambda: self.act(d), "", LINK_OFF, "Enter")
-            if a and not a["default"]:
-                return ui.vbox(ui.buttons([("Make sound output", lambda: self.output(d), "primary", VOLUME, "Space v o")]),
-                               ui.buttons([first, rem]), spacing=8)
-            return ui.buttons([first, rem])
-        if g == "Paired":
-            return ui.buttons([("Connect", lambda: self.act(d), "primary", LINK, "Enter"), rem])
-        return ui.buttons([("Pair & connect", lambda: self.act(d), "primary", LINK, "Enter"),
-                           ("Pair only", lambda: self.pair(d, False), "", "", "Space a p")])
+            acts = []
+            if a:
+                acts.append((VOLUME, "Sound output", "Space v o", lambda: self.output(d), "on" if a["default"] else ""))
+            acts += [(LINK_OFF, "Disconnect", "Enter", lambda: self.act(d), ""), rem]
+        elif g == "Paired":
+            acts = [(LINK, "Connect", "Enter", lambda: self.act(d), "primary"), rem]
+        else:
+            acts = [(LINK, "Pair & connect", "Enter", lambda: self.act(d), "primary"),
+                    (BT, "Pair only", "Space a p", lambda: self.pair(d, False), "")]
+        row = Gtk.Box(spacing=26, halign=Gtk.Align.CENTER)
+        for glyph, text, keys, cb, kind in acts:
+            row.append(self.round_action(glyph, text, keys, cb, kind))
+        return row
 
     # ------------------------------------------------------------ actions
     def act(self, d):
@@ -574,15 +565,18 @@ class Plugin(Base):
             work = lambda: util.run_full(["bluetoothctl", "disconnect", mac], timeout=15)
         else:
             self.busy[mac] = "Connecting…"
-            work = lambda: util.run_full(["bluetoothctl", "connect", mac], timeout=25)
+            work = lambda: bluez.connect(mac)
         self.set_status(f"{self.busy[mac].lower()[:-1]} {name}…")
         self.refresh_keep()
 
         def done(r):
             self.busy.pop(mac, None)
-            code, out, err = r if isinstance(r, tuple) else (1, "", str(r))
-            text = f"{out}\n{err}"
-            ok = code == 0 and "Failed" not in text
+            if isinstance(r, tuple) and len(r) == 2:      # bluez.connect: (ok, text)
+                ok, text, code = r[0], r[1], 0
+            else:
+                code, out, err = r if isinstance(r, tuple) else (1, "", str(r))
+                text = f"{out}\n{err}"
+                ok = code == 0 and "Failed" not in text
             if ok:
                 self.set_status("")
                 self.unreach.pop(mac, None)
@@ -803,6 +797,9 @@ class Plugin(Base):
             return True      # nothing else while pairing (the card says Enter / Esc)
         if name in ("Return", "KP_Enter") and self.adapter.get("state") == "off":
             self.power(True)
+            return True
+        if name in ("Return", "KP_Enter") and self.adapter.get("state") in ("stuck", "none"):
+            self.reset()
             return True
         return False
 

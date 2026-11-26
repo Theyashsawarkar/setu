@@ -48,13 +48,16 @@ def number(v):
 
 
 def adapter():
-    """The adapter's state: {"state": "ok"|"off"|"none"|"nodaemon"|"missing",
+    """The adapter's state: {"state": "ok"|"off"|"none"|"stuck"|"nodaemon"|"missing",
     "alias", "discoverable", "discovering"}."""
     if not have():
         return {"state": "missing"}
     code, out = bt("show", timeout=4)
     if code == 127 or "Waiting to connect to bluetoothd" in out and "Controller" not in out:
-        return {"state": "nodaemon"}
+        # Running but not answering is a stuck chip or daemon (reset() can
+        # fix that); not running at all is a service someone has to start.
+        running = util.run(["systemctl", "is-active", "--quiet", "bluetooth.service"])[0] == 0
+        return {"state": "stuck" if running else "nodaemon"}
     if "Controller" not in out:
         return {"state": "none"}
     p = props(out)
@@ -129,7 +132,7 @@ ERRORS = [
     ("not available", "Device is gone: it stopped being visible. Put it in pairing mode."),
     ("AlreadyConnected", "It's already connected."),
     ("InProgress", "Already busy with this device: wait a moment and try again."),
-    ("NotReady", "Bluetooth isn't ready: turn it on with Ctrl+B."),
+    ("NotReady", "Bluetooth isn't ready: turn it on with Space p p."),
     ("profile-unavailable", "Connected, but there's nothing to use: the device may need to be paired again."),
     ("abort-by-local", "Connecting was stopped on this computer."),
     ("abort-by-remote", "The device hung up: it may be connected to something else."),
@@ -150,6 +153,58 @@ def explain(text):
 def unreachable(text):
     t = (text or "").lower()
     return any(k in t for k in ("page-timeout", "not available", "host is down", "timed out", "connectionattemptfailed"))
+
+
+def reset():
+    """Wakes a Bluetooth chip that stopped answering, without root: an
+    rfkill block powers the controller down and the unblock starts it again
+    (the kernel reloads its firmware), then it's powered on. Returns the
+    adapter's state afterwards."""
+    util.run(["rfkill", "block", "bluetooth"])
+    time.sleep(1.5)
+    util.run(["rfkill", "unblock", "bluetooth"])
+    for _ in range(10):        # the controller comes back within a few seconds
+        time.sleep(0.8)
+        a = adapter()
+        if a["state"] in ("ok", "off"):
+            if a["state"] == "off":
+                bt("power", "on")
+                a = adapter()
+            return a["state"]
+    return adapter()["state"]
+
+
+# BlueZ fails a first connect now and then for reasons a second try fixes
+# (the device still busy with its last link, an audio profile not ready
+# yet, a radio that was dozing). These are worth trying again; "the device
+# isn't there" (page-timeout and friends) gets one more try, not three.
+RETRY = ("br-connection-unknown", "le-connection-abort", "Busy", "InProgress", "profile-unavailable",
+         "abort-by-local", "Input/output error", "br-connection-create-socket", "Failed to connect: org.bluez.Error.Failed")
+
+
+def connect(mac, tries=3, run=None, connected=None, sleep=time.sleep):
+    """Connects, trying again when BlueZ's failure is one a retry fixes.
+    Some failures still leave the device connected (an audio profile
+    errors, the link is up): those count as done. Returns (ok, text)."""
+    run = run or (lambda: util.run_full(["bluetoothctl", "connect", mac], timeout=25))
+    connected = connected or (lambda: info(mac).get("Connected") == "yes")
+    text = ""
+    for n in range(tries):
+        code, out, err = run()
+        text = f"{out}\n{err}"
+        if code == 0 and "Failed" not in text:
+            return True, text
+        if connected():
+            return True, text
+        if code == 127 and "not available" not in text.lower():
+            text = text if text.strip() else "timed out"
+        again = n == 0 if unreachable(text) else any(k.lower() in text.lower() for k in RETRY)
+        if not again or n == tries - 1:
+            break
+        if "NotReady" in text:
+            bt("power", "on")
+        sleep(1.5 * (n + 1))
+    return False, text
 
 
 def upower_batteries():

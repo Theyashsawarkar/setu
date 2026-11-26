@@ -16,7 +16,7 @@
 <!-- /identity -->
 
 <p align="center">
-  <b>Bluetooth: connected devices as cards with battery rings, what your headphones are doing, nearby devices by distance, and pairing with the code shown big.</b><br>
+  <b>Bluetooth: your devices with their batteries, the one you pick shown big, nearby devices by distance, pairing with the code shown big, and a Reset when the chip stops answering.</b><br>
   Bluetooth. A tool for <a href="https://github.com/Theyashsawarkar/vyom">Vyom</a>, keyboard-driven panels for Wayland.
 </p>
 
@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img alt="setu: connected devices as cards with battery rings (headphones at 78% playing music, earbuds with left, right and case, a mouse at 64%), paired devices and nearby ones with signal; the picked headphones' battery, audio mode, details, Disconnect and Remove" src="assets/screenshots/setu.webp" width="100%">
+  <img alt="setu: connected headphones at 78% (the sound output), earbuds and a mouse with their batteries, paired and nearby devices; the picked earbuds shown big: left 82%, right 76%, case 34%, the audio mode, and round Sound output, Disconnect and Remove buttons" src="assets/screenshots/setu.webp" width="100%">
 </p>
 <p align="center">
   <img alt="setu pairing a speaker: the 6-digit code shown big to compare, the steps Found, Confirm code, Connect, and They match (Enter) or Cancel (Esc)" src="assets/screenshots/setu-pairing.png" width="100%">
@@ -53,13 +53,14 @@ setu is bluetooth for [Vyom](https://github.com/Theyashsawarkar/vyom): one keybo
 
 ## Features
 
-- **Connected devices are cards**, two per row, each with a **battery ring**: green, **yellow under 20%** ("charge soon"), **red under 10%** ("plug it in"). When UPower reports several batteries for one device (earbuds left, right and case), each shows on its own.
-- **Earbuds: left, right and the case, each on its own** (any [Google Fast Pair](https://developers.google.com/nearby/fast-pair) buds: Pixel Buds, OnePlus, Sony, JBL, Nothing…). BlueZ only knows one level for them, but Fast Pair buds announce each bud and the case, with a charging flag, in their Bluetooth LE advertisements. While the panel is open setu runs a quiet LE scan of its own and reads them: three gauges side by side (Left · Right · Case, **red at 20% or less, yellow at 40% or less**, a green bolt while charging, — when a part didn't say, e.g. in the closed case) and `L 100 · R 90` on the card. It only listens: nothing is sent to the buds, and the scan stops when the panel closes. A reading not heard for two minutes says "As of …". The advertiser is matched to the connected device by its name; if two connected devices share a name, setu doesn't guess.
+- **Connected devices come first**, each with its battery at the right: green, **yellow under 20%** ("charge soon"), **red under 10%** ("plug it in"); earbuds show the lower bud. A peach speaker mark after the name is the sound output. **The device you pick shows big on the right**: its icon in glass, its name, the batteries as one strip of numbers (left, right and case for earbuds), the audio mode, and round buttons with their keys under them (Sound output, Disconnect, Remove; Connect; Pair & connect, Pair only).
+- **Earbuds: left, right and the case, each on its own** (any [Google Fast Pair](https://developers.google.com/nearby/fast-pair) buds: Pixel Buds, OnePlus, Sony, JBL, Nothing…). BlueZ only knows one level for them, but Fast Pair buds announce each bud and the case, with a charging flag, in their Bluetooth LE advertisements. While the panel is open setu runs a quiet LE scan of its own and reads them: Left · Right · Case side by side in the strip ( **red at 20% or less, yellow at 40% or less**, a green bolt while charging, — when a part didn't say, e.g. in the closed case) and the lower bud in the list. It only listens: nothing is sent to the buds, and the scan stops when the panel closes. A reading not heard for two minutes says "As of …". The advertiser is matched to the connected device by its name; if two connected devices share a name, setu doesn't guess.
 - **Headphones and speakers say what they're doing**: "Playing · high quality" (A2DP) or "Calls · with mic" (HFP/HSP), and which one is the **sound output**. In the preview, Music / Calls switches between the two (`Space v m` / `Space v c`); `Space v o` makes the selected one the sound output (through `pactl`).
 - **Paired devices** that aren't connected say when they were last connected, and "Out of range" when they couldn't be reached.
 - **Nearby devices, closest first**, with signal bars and a word (Close, Near, Far), found while the panel is open (the header says "Looking for devices"). Unnamed beacons hide behind `Space u h`.
 - **Pairing is a step of its own**: the 6-digit code shown big, to compare with the device, with "They match" (`Enter`) or Cancel (`Esc`), and the steps Found, Confirm code, Connect. A keyboard that wants a code typed gets it shown big too.
 - **Errors say why**, in plain words: "Device didn't answer: put it in pairing mode".
+- **It keeps working without a reboot.** Connecting tries again by itself when BlueZ fails in a way a second try fixes (busy, a profile not ready, a dozing radio), and a device that's on but answers with an error counts as connected. If the chip stops answering (mostly after sleep), the panel says so and **Reset** (`Enter`) wakes it: an rfkill block and unblock restarts the controller, no root needed. Turning Bluetooth on lifts a soft block by itself.
 - "Visible as <name>" in the header: the name the other device sees.
 - Remove asks first (`dd`, then `y`); an on/off switch (`Space p p`).
 - **Vim keys** (Vyom 0.7): NORMAL and INSERT modes, counts, `Space` as the leader with a which-key strip, `?` for every key and `Space Space` for a palette of every action.
