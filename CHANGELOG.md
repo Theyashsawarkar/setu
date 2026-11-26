@@ -4,6 +4,7 @@ Newest first. Releases are tags (`vX.Y.Z`).
 
 ## Unreleased
 
+- The panel no longer opens wider than the others when earbuds report every battery (it now fits the card: "L 82% · R 76% · Case 34%"); the playing line uses the card's room before it cuts off; the Nearby hint names the real key to show unnamed devices (Space u h, not Ctrl+U).
 - New screenshots in the Spatial look, taken with made-up demo data (WebP, sharp on high-density screens).
 - **A calmer Bluetooth panel.** The header says only what's unusual ("Visible as …" when others can find this computer; "Searching" while it looks), not "Named … · hidden" every time. Device cards have a lit edge, and the one you're on is brighter glass with a light rim instead of a thick white frame. The device's details are one quiet list, and its buttons sit side by side (Disconnect and Remove, Connect and Remove, Pair & connect and Pair only).
 - The website, closer to Vayu's own: the tool's screenshot blurred behind the page, a centred hero with the logo and the verse, the page you're on as the white pill, glass "On this page" and footer panels, releases as cards. No glow behind the logo, no coloured line beside the verse.

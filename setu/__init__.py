@@ -44,6 +44,7 @@ CHECK, VOLUME, EYE, EYE_OFF, CASE = "\U000f012c", "\U000f057e", "\U000f0208", "\
 LINK, LINK_OFF, DELETE, CLOSE, POWER = "\U000f0337", "\U000f0338", "\U000f01b4", "\U000f0156", "\U000f0425"
 BOLT = "\U000f0241"
 PART_NAMES = {"left": "Left", "right": "Right", "case": "Case"}
+SHORT = {"Left": "L", "Right": "R"}   # a card's battery line: "L 82% · R 76% · Case 34%"
 
 
 def icon_of(d):
@@ -266,9 +267,9 @@ class Plugin(Base):
             rows.append(Section("Paired, not connected", len(paired), "Enter connects"))
             rows += [self.row(d) for d in paired]
         if self.hidden:
-            note = f"closest first · Ctrl+U shows {self.hidden} unnamed"
+            note = f"closest first · Space u h shows {self.hidden} unnamed"
         elif self.show_unnamed:
-            note = "closest first · Ctrl+U hides unnamed"
+            note = "closest first · Space u h hides them"
         else:
             note = "closest first"
         if near or (not q and (self.hidden or self.show_unnamed)):
@@ -385,34 +386,34 @@ class Plugin(Base):
             visual = ui.hbox(*rings, spacing=4)
         else:
             visual = ui.tile(icon_of(d), "blue", 22, "setu-noring")
-        lines = [ui.label(d["name"], "setu-card-name", xalign=0, ellipsize=Pango.EllipsizeMode.END)]
+        lines = [ui.label(d["name"], "setu-card-name", xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10)]
         if len(bats) == 1:
             p = bats[0][1]
             col, words = charge(p)
             lines.append(ui.label(f"{p}%" + (f" · {words}" if words else ""), f"t-{col}", "setu-card-line",
-                                  xalign=0, ellipsize=Pango.EllipsizeMode.END))
+                                  xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
         elif bats and d.get("fp"):
             parts = d["fp"]["parts"]
             worst = min((p["level"] for p in parts.values() if p["level"] is not None), default=100)
             col = part_color(worst)
             lines.append(ui.label(fastpair.compact(parts), "setu-card-line", f"t-{col}",
-                                  xalign=0, ellipsize=Pango.EllipsizeMode.END))
+                                  xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
         elif bats:
-            ok = [f"{lab} {p}%" for lab, p in bats if charge(p)[0] == "green"]
+            ok = [f"{SHORT.get(lab, lab)} {p}%" for lab, p in bats if charge(p)[0] == "green"]
             low = [(lab, p) for lab, p in bats if charge(p)[0] != "green"]
             if ok:
-                lines.append(ui.label(" · ".join(ok), "setu-card-line", xalign=0, ellipsize=Pango.EllipsizeMode.END))
+                lines.append(ui.label(" · ".join(ok), "setu-card-line", xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
             for lab, p in low:
                 col, words = charge(p)
                 lines.append(ui.label(f"{lab} {p}% · {words}", f"t-{col}", "setu-card-line", xalign=0,
-                                      ellipsize=Pango.EllipsizeMode.END))
+                                      ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
         a = self.audio.get(d["mac"].upper())
         if a:
             what = ui.hbox(ui.label(VOLUME, "glyph", "t-peach" if a["default"] else "t-gray"),
-                           ui.label(audio.doing(a), "setu-card-line", ellipsize=Pango.EllipsizeMode.END), spacing=5)
+                           ui.label(audio.doing(a), "setu-card-line", ellipsize=Pango.EllipsizeMode.END, max_width_chars=10, hexpand=True, xalign=0), spacing=5)
             lines.append(what)
         else:
-            lines.append(ui.label(bluez.kind(d), "setu-card-line", "setu-quiet", xalign=0))
+            lines.append(ui.label(bluez.kind(d), "setu-card-line", "setu-quiet", xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=10))
         text = ui.vbox(*lines[:3], spacing=2)
         text.set_hexpand(True)
         text.set_valign(Gtk.Align.CENTER)
