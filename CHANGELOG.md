@@ -2,6 +2,11 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## v0.5.1 -- 2026-11-26
+
+- **The case keeps its battery.** Earbuds only report the case while the buds are in it (or it's open); with the buds in your ears the case said "—". setu now remembers the case's last level per device and shows it a step quieter with its age ("Case · 2 hours"), charging only while that's under an hour old. The tooltip says why.
+- The device's icon is drawn centred on its own shape, not on the font's box: the headphones sat a few pixels off in their glass tile.
+
 ## v0.5.0 -- 2026-11-26
 
 - **A new look: the picked device, big.** No more cards and rings: connected devices are the list's first rows, each with its battery at the right (the lower bud for earbuds) and a peach speaker mark on the sound output. The device you pick shows on the right as a showcase: its icon in glass, its name and state, the batteries as one strip of numbers (Left · Right · Case for earbuds), the audio mode, round buttons with their keys under them, and one quiet line of details. "Pair only" has its own icon.

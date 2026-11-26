@@ -9,7 +9,10 @@ a step of its own: the 6-digit code shown big, to compare with the device.
 import subprocess
 import time
 
-from gi.repository import GLib, Gtk, Pango
+import gi
+
+gi.require_version("PangoCairo", "1.0")
+from gi.repository import GLib, Gtk, Pango, PangoCairo
 from vyom import Hint, Row, Section, ui, util
 from vyom import Plugin as Base
 
@@ -95,6 +98,27 @@ def ago(t):
     return "just now"
 
 
+def centered_glyph(text, size, cls=""):
+    """A Nerd Font glyph drawn centred on its ink, not on the font's box: an
+    icon font leaves uneven room around its glyphs (the headphones sat a few
+    pixels low and right in their tile). The widget is size x size; the
+    colour is the CSS colour of `cls`."""
+    area = Gtk.DrawingArea(content_width=size, content_height=size, hexpand=True, vexpand=True)
+    if cls:
+        area.add_css_class(cls)
+
+    def draw(widget, cr, w, h):
+        layout = widget.create_pango_layout(text)
+        layout.set_font_description(Pango.FontDescription.from_string(f"JetBrainsMono Nerd Font Propo {size * 0.82}px"))
+        ink, _logical = layout.get_pixel_extents()
+        c = widget.get_color()
+        cr.set_source_rgba(c.red, c.green, c.blue, c.alpha)
+        cr.move_to(round((w - ink.width) / 2 - ink.x), round((h - ink.height) / 2 - ink.y))
+        PangoCairo.show_layout(cr, layout)
+    area.set_draw_func(draw)
+    return area
+
+
 class Plugin(Base):
     name, title, icon, color = "setu", "Bluetooth", BT, "blue"
     placeholder = "Filter devices…"
@@ -126,6 +150,9 @@ class Plugin(Base):
         self.seen = util.load_state("setu-last-connected", {})
         self.seen_saved = 0.0
         self.fp = fastpair.Scanner()   # left / right / case from Fast Pair advertisements
+        # The case's last level, by device: earbuds only report the case while
+        # the buds are in it (or it's open), so it's remembered, like a phone.
+        self.case_memo = util.load_state("setu-case", {})
         self.is_open = False
 
     def available(self):
@@ -254,7 +281,7 @@ class Plugin(Base):
         for d, name in zip(connected, names):
             r = readings.get(name)
             if r and names.count(name) == 1:
-                d["fp"] = r
+                d["fp"] = self.with_case(d["mac"], r)
                 if r.get("address"):
                     matched.add(r["address"].upper())
         devs = [d for d in devs if d["mac"].upper() not in matched or d.get("Connected") == "yes"]
@@ -293,6 +320,27 @@ class Plugin(Base):
         self.empty_text = "" if conn else ("Nothing here yet: nearby devices show up as they're found"
                                            if not q else "No device matches")
         return rows
+
+    def with_case(self, mac, r):
+        """The reading with the case filled in from memory when the buds
+        didn't say (the case closed, or the buds out of it); a reading that
+        does say updates the memory."""
+        case = r["parts"].get("case") or {}
+        memo = self.case_memo.get(mac)
+        if case.get("level") is not None:
+            new = {"level": case["level"], "charging": case["charging"], "at": r["at"]}
+            if not memo or (memo["level"], memo["charging"]) != (new["level"], new["charging"]) \
+                    or r["at"] - memo["at"] > 300:
+                self.case_memo[mac] = new
+                util.save_state("setu-case", self.case_memo)
+            return r
+        if not memo:
+            return r
+        parts = dict(r["parts"])
+        # charging is only claimed while it's fresh: an hour later it's surely done or unplugged
+        parts["case"] = {"level": memo["level"], "charging": memo["charging"] and time.time() - memo["at"] < 3600,
+                         "remembered": memo["at"]}
+        return {**r, "parts": parts}
 
     def batteries(self, d):
         """[(label, percent)]: the earbuds' own (Fast Pair: left, right, case)
@@ -438,13 +486,11 @@ class Plugin(Base):
             chips.append(("Sound output", "peach", VOLUME))
         if g == "Paired" and mac in self.unreach:
             chips.append(("Out of range", "gray"))
-        icon = ui.label(icon_of(d), "glyph", "setu-hero-glyph")
         hero = Gtk.Box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
         hero.add_css_class("setu-hero-icon")
         if g == "Nearby":
             hero.add_css_class("setu-hero-quiet")
-        icon.set_hexpand(True)
-        hero.append(icon)
+        hero.append(centered_glyph(icon_of(d), 62, "setu-hero-glyph"))
         name = ui.label(d["name"], "setu-hero-name", justify=Gtk.Justification.CENTER,
                         ellipsize=Pango.EllipsizeMode.END, max_width_chars=10)
         chiprow = Gtk.Box(spacing=6, halign=Gtk.Align.CENTER)
@@ -492,15 +538,15 @@ class Plugin(Base):
         if fp:
             for key in fastpair.PARTS:
                 p = fp["parts"][key]
-                cells.append((PART_NAMES[key], p["level"], p["charging"]))
+                cells.append((PART_NAMES[key], p["level"], p["charging"], p.get("remembered")))
         else:
             for lab, p in self.batteries(d):
-                cells.append((lab or "Battery", p, False))
+                cells.append((lab or "Battery", p, False, None))
         if not cells:
             return None
         grid = Gtk.Grid(column_homogeneous=True)
         grid.add_css_class("setu-stats")
-        for i, (lab, lvl, charging) in enumerate(cells):
+        for i, (lab, lvl, charging, remembered) in enumerate(cells):
             col = (part_color(lvl) if fp else charge(lvl)[0]) if lvl is not None else "gray"
             if lvl is None:
                 num = ui.label("—", "setu-stat-num", "setu-quiet")
@@ -511,11 +557,16 @@ class Plugin(Base):
                 if charging:
                     num.append(ui.label(BOLT, "glyph", "t-green", "setu-bolt", valign=Gtk.Align.CENTER))
             bar = ui.progress((lvl or 0) / 100, col)
-            cell = ui.vbox(num, bar, ui.label(lab, "setu-stat-name"), spacing=7, cls="setu-stat")
+            name = lab if not remembered else f"{lab} · {ago(remembered).removesuffix(' ago')}"
+            cell = ui.vbox(num, bar, ui.label(name, "setu-stat-name"), spacing=7, cls="setu-stat")
             if i:
                 cell.add_css_class("setu-stat-next")
-            if lvl is None:
-                cell.set_tooltip_text("Not reported: in the case, or the case is closed")
+            if remembered:
+                cell.add_css_class("setu-stat-old")
+                cell.set_tooltip_text(f"Last heard {ago(remembered)}: the case only reports its battery while the "
+                                      "buds are in it or it's open")
+            elif lvl is None:
+                cell.set_tooltip_text("Not reported yet: put the buds in the case and open it once, and setu remembers it")
             grid.attach(cell, i, 0, 1, 1)
         return grid
 

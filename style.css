@@ -35,6 +35,8 @@
 .setu-stat-name { color: @subtext0; font-size: 11.5px; font-weight: 600; }
 .setu-stat progressbar trough, .setu-stat progressbar progress { min-height: 4px; border-radius: 2px; }
 .setu-bolt { font-size: 13px; }
+/* a remembered level (the case, closed): the same, a step quieter */
+.setu-stat.setu-stat-old .setu-stat-num { color: @subtext0; }
 button.setu-round { min-width: 52px; min-height: 52px; padding: 0; border-radius: 999px;
   background: alpha(white, 0.08); border: 1px solid alpha(white, 0.13); box-shadow: inset 0 1px alpha(white, 0.14); color: @text; }
 button.setu-round:hover { background: alpha(white, 0.14); }
