@@ -198,12 +198,26 @@ class Plugin(Base):
                 self.scan = None
 
     def power(self, on):
-        if self.adapter.get("blocked") and on:
-            self.set_status("Bluetooth is blocked: rfkill unblock bluetooth (or the airplane-mode key)")
-            return
+        blocked = bool(self.adapter.get("blocked")) and on
         self.set_status("turning Bluetooth on…" if on else "turning Bluetooth off…")
-        self.background(lambda: bluez.bt("power", "on" if on else "off"),
-                        lambda _r: (self.set_status(""), self.refresh()))
+
+        def work():
+            # A soft block (rfkill, or an earlier "off" somewhere else) is lifted
+            # first: logind lets the seat's user do it. A hard block (a switch)
+            # can't be, and says so.
+            if blocked and bluez.unblock() != 0:
+                return "blocked"
+            return bluez.bt("power", "on" if on else "off")[0]
+
+        def done(r):
+            if r == "blocked":
+                self.set_status("Bluetooth is blocked by a switch or the airplane-mode key", "bad")
+            elif r:
+                self.set_status("Bluetooth didn't turn " + ("on" if on else "off"), "bad")
+            else:
+                self.set_status("")
+            self.refresh()
+        self.background(work, done)
 
     # ------------------------------------------------------------ the list
     def search(self, q):
@@ -335,7 +349,7 @@ class Plugin(Base):
                            ui.label("Your devices can't connect until it's on.", "hero-sub", xalign=0), spacing=4)
             body.set_hexpand(True)
             return ui.hero(ui.tile(BT_OFF, "gray", 22, "tile"), body,
-                           ui.button("Turn on", lambda: self.power(True), "primary", POWER, "Ctrl+B"),
+                           ui.button("Turn on", lambda: self.power(True), "primary", POWER, "Enter"),
                            color="gray")
         # Bluetooth is on: the connected devices as cards, two per row.
         items = self.panel.items if self.panel else []

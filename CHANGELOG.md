@@ -4,6 +4,7 @@ Newest first. Releases are tags (`vX.Y.Z`).
 
 ## Unreleased
 
+- **Turning Bluetooth on lifts a soft block.** When Bluetooth was blocked by rfkill (or switched off somewhere else), Turn on only told you to run `rfkill unblock bluetooth`; now it does that itself and turns the adapter on, and says so if a switch or the airplane-mode key is what's blocking it. The Turn on button shows Enter, not the old Ctrl+B.
 - The panel no longer opens wider than the others when earbuds report every battery (it now fits the card: "L 82% · R 76% · Case 34%"); the playing line uses the card's room before it cuts off; the Nearby hint names the real key to show unnamed devices (Space u h, not Ctrl+U).
 - New screenshots in the Spatial look, taken with made-up demo data (WebP, sharp on high-density screens).
 - **A calmer Bluetooth panel.** The header says only what's unusual ("Visible as …" when others can find this computer; "Searching" while it looks), not "Named … · hidden" every time. Device cards have a lit edge, and the one you're on is brighter glass with a light rim instead of a thick white frame. The device's details are one quiet list, and its buttons sit side by side (Disconnect and Remove, Connect and Remove, Pair & connect and Pair only).

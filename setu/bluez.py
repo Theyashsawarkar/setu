@@ -2,6 +2,7 @@
 errors. Everything here runs in a worker thread (never touches widgets)."""
 import re
 import shutil
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from vyom import util
@@ -16,6 +17,16 @@ def have():
 
 def bt(*args, timeout=10):
     return util.run(["bluetoothctl", *args], timeout=timeout)
+
+
+def unblock():
+    """Lifts rfkill's soft block on Bluetooth (exit code; 0 = done). A hard
+    block stays: `rfkill unblock` succeeds but the adapter stays blocked."""
+    code, _ = util.run(["rfkill", "unblock", "bluetooth"])
+    if code:
+        return code
+    time.sleep(0.5)    # the adapter comes back a moment later
+    return 0 if adapter().get("blocked") is not True else 1
 
 
 def props(text):
