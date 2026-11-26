@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img alt="setu: connected devices as cards with battery rings (a mouse at 8% in red, earbuds at 18% in yellow), what the headphones are playing, a paired soundbar, and nearby devices with signal bars; the picked headphones' battery, audio mode, Disconnect and Remove" src="assets/screenshots/setu.png" width="100%">
+  <img alt="setu: connected devices as cards with battery rings (headphones at 78% playing music, earbuds with left, right and case, a mouse at 64%), paired devices and nearby ones with signal; the picked headphones' battery, audio mode, details, Disconnect and Remove" src="assets/screenshots/setu.webp" width="100%">
 </p>
 <p align="center">
   <img alt="setu pairing a speaker: the 6-digit code shown big to compare, the steps Found, Confirm code, Connect, and They match (Enter) or Cancel (Esc)" src="assets/screenshots/setu-pairing.png" width="100%">
