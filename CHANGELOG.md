@@ -2,6 +2,10 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## Unreleased
+
+- CI installs PyGObject with GTK 4, cairo and gtk4-layer-shell from apt (and runs the system Python) so the tests that import GTK run there too; they failed on GitHub with `No module named 'gi'` since they were added.
+
 ## v0.6.0 -- 2026-11-27
 
 - **The list is there when the panel opens**: the adapter, every device and their batteries come from Vyom's live state (BlueZ's and UPower's own signals keep it current), not a `bluetoothctl info` per device and `upower -d` on every refresh; a device found, connected or charging shows by itself while the panel shows (at most one redraw a second while a scan pours in). With an older Vyom it asks bluetoothctl, as before.
