@@ -1,7 +1,7 @@
 name = "setu"
 title = "Bluetooth"
 description = "Bluetooth: your devices with their batteries, the one you pick shown big, nearby devices by distance, pairing with the code shown big, and a Reset when the chip stops answering."
-version = "0.5.1"
+version = "0.6.0"
 vyom = "0.7.0"
 icon = "󰂯"
 color = "blue"

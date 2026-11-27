@@ -2,7 +2,7 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
-## Unreleased
+## v0.6.0 -- 2026-11-27
 
 - **The list is there when the panel opens**: the adapter, every device and their batteries come from Vyom's live state (BlueZ's and UPower's own signals keep it current), not a `bluetoothctl info` per device and `upower -d` on every refresh; a device found, connected or charging shows by itself while the panel shows (at most one redraw a second while a scan pours in). With an older Vyom it asks bluetoothctl, as before.
 - The buds' scan can no longer run on after the panel closes: closing it while BlueZ was still starting the scan left it on (and kept the Bluetooth radio busy).
