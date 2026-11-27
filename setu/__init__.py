@@ -198,11 +198,40 @@ class Plugin(Base):
     # ------------------------------------------------------------ lifecycle
     def opened(self, args):
         super().opened(args)
+        # BlueZ's own signals refresh the list while it shows (a device
+        # found, connected, its battery)
+        if bluez.state is not None and getattr(self, "watch_h", None) is None:
+            self.watch_h = bluez.state.watch("bluetooth", self.live_changed)
         self.start_scan()
         self.is_open = True
-        self.background(self.fp.start)
+
+        def start():
+            self.fp.start()
+            if not self.is_open:      # closed while BlueZ started the scan: its stop found nothing yet
+                self.fp.stop()
+        self.background(start)
+
+    def live_changed(self, _snap):
+        """A change (a scan's signal levels come in bursts): one refresh
+        now, then at most one a second while changes keep coming."""
+        if getattr(self, "live_gate", None):
+            self.live_again = True
+            return
+        if self.is_open and self.session is None:
+            self.refresh()
+        self.live_again = False
+
+        def reopen():
+            self.live_gate = None
+            if self.live_again:
+                self.live_changed(None)
+            return False
+        self.live_gate = GLib.timeout_add(1000, reopen)
 
     def closed(self):
+        if bluez.state is not None and getattr(self, "watch_h", None) is not None:
+            bluez.state.unwatch(self.watch_h)
+            self.watch_h = None
         self.is_open = False
         self.background(self.fp.stop)       # our LE scan ends with the panel
         if self.session is not None:
@@ -251,15 +280,17 @@ class Plugin(Base):
         if self.session is not None:
             self.empty_text = ""
             return []
-        a = bluez.adapter()
+        # The live state (Vyom 0.9) at once; bluetoothctl when there's none.
+        a = bluez.live_adapter() or bluez.adapter()
         self.adapter = a
         GLib.idle_add(self.sync_header)
         if a["state"] != "ok":
             return []
-        devs, self.hidden = bluez.devices(self.show_unnamed)
+        devs, self.hidden = bluez.live_devices(self.show_unnamed) or bluez.devices(self.show_unnamed)
         connected = [d for d in devs if d.get("Connected") == "yes"]
         self.audio = audio.state() if any(bluez.is_audio(d) for d in connected) else {}
-        self.ubats = bluez.upower_batteries() if connected else {}
+        ub = bluez.live_upower_batteries() if connected else {}
+        self.ubats = ub if ub is not None else bluez.upower_batteries()
         now = time.time()
         for d in connected:
             self.seen[d["mac"]] = now

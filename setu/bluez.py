@@ -7,6 +7,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 from vyom import util
 
+try:            # Vyom 0.9's live state: BlueZ and UPower as their own signals keep them
+    from vyom import live as state
+except ImportError:
+    state = None
+
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07")
 MAC = re.compile(r"^[0-9A-Fa-f]{2}([:-][0-9A-Fa-f]{2}){5}$")
 
@@ -242,5 +247,79 @@ def upower_batteries():
         for k, model, _ in items:
             lab = k if kinds.count(k) == 1 else f"{k} {model}"
             labels.append((lab or model or "Battery").strip().capitalize())
+        out[mac] = [(lab, p) for lab, (_, _, p) in zip(labels, items)]
+    return out
+
+
+# ------------------------------------------------------------ live state
+# With Vyom 0.9 the adapter and the devices come from its live state (BlueZ's
+# objects, kept current by its signals): no bluetoothctl on the way, so the
+# list shows at once. The dicts have bluetoothctl's keys, so the rest of setu
+# doesn't care where they came from. None: ask bluetoothctl (an older Vyom,
+# or bluetoothd isn't answering: adapter() tells stuck from not running).
+
+UUID_NAMES = {"0000110b": "Audio Sink", "0000110a": "Audio Source", "00001108": "Headset",
+              "0000111e": "Handsfree", "00001112": "Headset AG", "0000111f": "Handsfree AG",
+              "00001124": "Human Interface Device"}
+
+
+def yn(v):
+    return "yes" if v else "no"
+
+
+def live_adapter(snap=None):
+    snap = snap or (state.get("bluetooth") if state is not None else None)
+    if not snap or not snap.get("running") or not snap.get("adapter"):
+        return None
+    a = snap["adapter"]
+    return {"state": "ok" if a["powered"] else "off", "alias": a.get("alias") or "this computer",
+            "discoverable": a["discoverable"], "discovering": a["discovering"], "blocked": a["blocked"]}
+
+
+def live_device(d):
+    uuids = [f"{UUID_NAMES.get(u[:8].lower(), 'Unknown')} ({u})" for u in d.get("uuids", [])]
+    return {"mac": d["mac"], "Name": d.get("name") or "", "Alias": d.get("alias") or "", "Icon": d.get("icon") or "",
+            "Connected": yn(d["connected"]), "Paired": yn(d["paired"]), "Bonded": yn(d["bonded"]),
+            "Trusted": yn(d["trusted"]), "Blocked": yn(d["blocked"]), "UUID": ", ".join(uuids),
+            "battery": d.get("battery"), "rssi": d.get("rssi")}
+
+
+def live_devices(with_unnamed=False, snap=None):
+    """(devices, unnamed left out) like devices(), from the live state; None
+    without it."""
+    snap = snap or (state.get("bluetooth") if state is not None else None)
+    if not snap or not snap.get("running") or not snap.get("adapter"):
+        return None
+    out, hidden = [], 0
+    for d in snap.get("devices", []):
+        if unnamed(d["mac"], d.get("alias") or d.get("name")) and not with_unnamed and not d["paired"]:
+            hidden += 1
+            continue
+        out.append(live_device(d))
+    return out, hidden
+
+
+MAC_ANY = re.compile(r"([0-9A-Fa-f]{2}[:_]){5}[0-9A-Fa-f]{2}")
+
+
+def live_upower_batteries(snap=None):
+    """upower_batteries() from the live state; None without it."""
+    snap = snap or (state.get("battery") if state is not None else None)
+    if not snap or not snap.get("running"):
+        return None
+    found = {}
+    for d in snap.get("devices", []):
+        m = MAC_ANY.search(d.get("native_path") or "") or MAC_ANY.search(d.get("serial") or "")
+        if not m:
+            continue
+        mac = m.group(0).replace("_", ":").upper()
+        found.setdefault(mac, []).append([d.get("type", ""), d.get("model", ""), int(d.get("percentage") or 0)])
+    out = {}
+    for mac, items in found.items():
+        if len(items) < 2:
+            continue
+        kinds = [k for k, _, _ in items]
+        labels = [((k if kinds.count(k) == 1 else f"{k} {model}") or model or "Battery").strip().capitalize()
+                  for k, model, _ in items]
         out[mac] = [(lab, p) for lab, (_, _, p) in zip(labels, items)]
     return out
