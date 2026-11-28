@@ -243,6 +243,28 @@ class Plugin(Base):
         if bluez.have():
             util.spawn(["bluetoothctl", "scan", "off"])
 
+    def parked(self):
+        """Vyom 0.13 (ADR 17): the panel hid but stays open (you left its
+        workspace, or another panel took the centre). The scans stop (a
+        radio searching for a list nobody sees); a pairing under way goes on."""
+        self.background(self.fp.stop)
+        if self.scan and self.scan.poll() is None:
+            self.scan.terminate()
+        self.scan = None
+        if bluez.have() and self.session is None:
+            util.spawn(["bluetoothctl", "scan", "off"])
+
+    def unparked(self):
+        """It shows again as you left it, and searches again."""
+        self.start_scan()
+        fp = self.fp
+
+        def start():
+            fp.start()
+            if not self.is_open:
+                fp.stop()
+        self.background(start)
+
     def start_scan(self):
         if not bluez.have() or self.adapter.get("state") != "ok":
             return

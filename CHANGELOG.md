@@ -4,6 +4,7 @@ Newest first. Releases are tags (`vX.Y.Z`).
 
 ## Unreleased
 
+- **Hidden, it stops searching** (Vyom 0.13, ADR 17): Vyom now keeps panels open per workspace, hiding one when you leave its workspace or another panel takes the centre. While it's hidden the Bluetooth scans stop (a pairing under way goes on); when it shows again, as you left it, it searches again (`parked()` / `unparked()`).
 - Website: pranali joins the family list in the footer; the site builder passes ruff.
 - CI installs PyGObject with GTK 4, cairo and gtk4-layer-shell from apt (and runs the system Python) so the tests that import GTK run there too; they failed on GitHub with `No module named 'gi'` since they were added.
 
