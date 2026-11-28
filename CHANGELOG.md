@@ -2,7 +2,7 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
-## Unreleased
+## v0.7.0 -- 2026-11-28
 
 - **Hidden, it stops searching** (Vyom 0.13, ADR 17): Vyom now keeps panels open per workspace, hiding one when you leave its workspace or another panel takes the centre. While it's hidden the Bluetooth scans stop (a pairing under way goes on); when it shows again, as you left it, it searches again (`parked()` / `unparked()`).
 - Website: pranali joins the family list in the footer; the site builder passes ruff.
